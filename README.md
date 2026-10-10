@@ -35,8 +35,9 @@ from pathlib import Path
 from docguard.code.python_parser import parse_python_file
 from docguard.code.scanner import discover_python_files
 
-for path in discover_python_files(Path("src")):
-    for entity in parse_python_file(path):
+root = Path(".").resolve()
+for path in discover_python_files(root / "src"):
+    for entity in parse_python_file(path, repository_root=root):
         print(entity.kind.value, entity.qualified_name, entity.start_line)
 ```
 
@@ -61,8 +62,19 @@ The tests also support the standard-library runner:
   strings produced by `ast.unparse()`, not evaluated values.
 - Invalid syntax raises `SyntaxError`; missing files and filesystem errors also
   propagate. Valid files without definitions return an empty list.
-- Entity IDs are `<supplied file path>:<qualified name>`. Identical paths and
-  source produce identical results; absolute and relative paths are not yet
-  canonicalized. Repeated definitions of the same qualified name share an ID.
+- Entity IDs are `<normalized file path>:<qualified name>`. Pass `repository_root`
+  to use portable repository-relative paths (for example,
+  `src/client.py:Client.connect`); otherwise paths are resolved absolute paths.
+  Both forms use forward slashes. Relative input paths are interpreted from the
+  working directory, not from `repository_root`. Files resolving outside the
+  supplied root are rejected. IDs survive comment/line shifts, but do not track
+  renames.
+- Every definition is retained. Repeated qualified names within a file receive
+  occurrence suffixes: `module.py:connect`, `module.py:connect#2`,
+  `module.py:connect#3`. Counts follow traversal order, span entity kinds, and
+  reset for each parse. Names and qualified names remain unchanged. Nested
+  definitions are counted by their own full qualified name; parent suffixes
+  are not inherited. Inserting, deleting, or reordering duplicate definitions
+  can change which definition an occurrence ID identifies.
 - This milestone does not implement documentation parsing, change detection,
   rename tracking, or AI-driven updates.

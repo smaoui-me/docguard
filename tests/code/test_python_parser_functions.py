@@ -240,11 +240,13 @@ class TestPythonParserFunctions(unittest.TestCase):
         self.assertEqual(
             [entity.id for entity in first],
             [
-                f"{path}:greet",
-                f"{path}:goodbye",
+                f"{path.resolve().as_posix()}:greet",
+                f"{path.resolve().as_posix()}:goodbye",
             ],
         )
-        self.assertTrue(all(entity.file_path == str(path) for entity in first))
+        self.assertTrue(
+            all(entity.file_path == path.resolve().as_posix() for entity in first)
+        )
         self.assertEqual(first[0].docstring, "Bonjour, caf\u00e9!")
 
     def test_missing_file_raises_file_not_found(self):
@@ -260,7 +262,7 @@ class TestPythonParserFunctions(unittest.TestCase):
             with self.assertRaises(SyntaxError) as raised:
                 parse_python_file(path)
 
-            self.assertEqual(raised.exception.filename, str(path))
+            self.assertEqual(raised.exception.filename, path.resolve().as_posix())
             self.assertEqual(raised.exception.lineno, 1)
 
     def test_source_is_not_executed(self):

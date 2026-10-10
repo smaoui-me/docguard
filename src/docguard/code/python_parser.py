@@ -10,11 +10,17 @@ from pathlib import Path
 from docguard.code.models import CodeEntity, EntityKind, Parameter, ParameterKind
 
 
-def parse_python_file(path: Path) -> list[CodeEntity]:
+def parse_python_file(
+    path: Path, *, repository_root: Path | None = None
+) -> list[CodeEntity]:
     """Parse a Python source file from disk into a list of CodeEntity objects.
 
     Args:
         path: Path to the .py file to inspect.
+            Relative paths are interpreted from the current working directory.
+        repository_root: Optional root for portable repository-relative IDs.
+            Without it, file paths are resolved absolute paths. Both forms use
+            forward slashes, and symlinks are resolved before containment checks.
 
     Returns:
         A list of CodeEntity objects discovered in the file.
@@ -22,9 +28,18 @@ def parse_python_file(path: Path) -> list[CodeEntity]:
     Raises:
         FileNotFoundError: If the file does not exist.
         SyntaxError: If the file contains invalid Python syntax.
+        ValueError: If the file resolves outside repository_root.
+        NotADirectoryError: If repository_root is not a directory.
     """
-    source_code = path.read_text(encoding="utf-8")
-    return _parse_source(source_code, file_path=str(path))
+    resolved_path = path.resolve(strict=True)
+    identity_path = resolved_path
+    if repository_root is not None:
+        root = repository_root.resolve(strict=True)
+        if not root.is_dir():
+            raise NotADirectoryError(root)
+        identity_path = resolved_path.relative_to(root)
+    source_code = resolved_path.read_text(encoding="utf-8")
+    return _parse_source(source_code, file_path=identity_path.as_posix())
 
 
 def _parse_source(source: str, file_path: str) -> list[CodeEntity]:
@@ -46,6 +61,14 @@ class _EntityVisitor(ast.NodeVisitor):
         self.file_path = file_path
         self.entities: list[CodeEntity] = []
         self.scope_stack: list[tuple[str, bool]] = []
+        self.occurrences: dict[str, int] = {}
+
+    def _make_entity_id(self, qualified_name: str) -> str:
+        """Disambiguate repeated qualified names in traversal order within a file."""
+        occurrence = self.occurrences.get(qualified_name, 0) + 1
+        self.occurrences[qualified_name] = occurrence
+        base_id = f"{self.file_path}:{qualified_name}"
+        return base_id if occurrence == 1 else f"{base_id}#{occurrence}"
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Handle synchronous function and method definitions."""
@@ -65,7 +88,7 @@ class _EntityVisitor(ast.NodeVisitor):
             kind = EntityKind.METHOD if is_method else EntityKind.FUNCTION
         self.entities.append(
             CodeEntity(
-                id=f"{self.file_path}:{qualified_name}",
+                id=self._make_entity_id(qualified_name),
                 name=node.name,
                 qualified_name=qualified_name,
                 kind=kind,
@@ -91,7 +114,7 @@ class _EntityVisitor(ast.NodeVisitor):
         qualified_name = ".".join([name for name, _ in self.scope_stack] + [node.name])
         self.entities.append(
             CodeEntity(
-                id=f"{self.file_path}:{qualified_name}",
+                id=self._make_entity_id(qualified_name),
                 name=node.name,
                 qualified_name=qualified_name,
                 kind=EntityKind.CLASS,
