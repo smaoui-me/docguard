@@ -4,7 +4,7 @@ A self-healing technical documentation tool.
 
 Requires Python 3.11 or newer.
 
-## Current milestone: Python parser and file discovery
+## Current milestone: repository indexes, snapshots, and metadata comparison
 
 DocGuard extracts immutable entities for classes, functions, methods, and their
 async variants. Metadata includes qualified names, source lines, annotations,
@@ -14,6 +14,11 @@ are included, and `self` and `cls` are preserved as written in the source.
 The repository scanner discovers Python files independently of parsing. It sorts
 paths, includes test files, and skips common environment/cache directories and
 symlinks. It does not interpret `.gitignore`.
+
+Repository indexes combine discovery and parsing into an ID-to-entity dictionary.
+Versioned JSON snapshots preserve those entities between runs. Comparisons report
+added, removed, modified, and moved entities, with metadata and line changes kept
+separate. All of these features use the standard library.
 
 ## Setup (PowerShell)
 
@@ -40,6 +45,96 @@ for path in discover_python_files(root / "src"):
     for entity in parse_python_file(path, repository_root=root):
         print(entity.kind.value, entity.qualified_name, entity.start_line)
 ```
+
+## Index, save, load, and compare
+
+Create a baseline before editing your Python source:
+
+```python
+from pathlib import Path
+
+from docguard.code.index import index_repository
+from docguard.code.snapshots import save_snapshot
+
+baseline = index_repository(Path("."))
+save_snapshot(baseline, Path("baseline.json"))
+```
+
+After editing source, compare against that saved baseline:
+
+```python
+from pathlib import Path
+
+from docguard.code.comparison import compare_snapshots
+from docguard.code.index import index_repository
+from docguard.code.snapshots import load_snapshot
+
+before = load_snapshot(Path("baseline.json"))
+after = index_repository(Path("."))
+changes = compare_snapshots(before, after)
+
+for entity in changes.added:
+    print("added", entity.id)
+for entity in changes.removed:
+    print("removed", entity.id)
+for change in changes.modified:
+    print("modified", change.after.id, change.changed_fields)
+for change in changes.moved:
+    print("line bounds changed", change.after.id, change.changed_fields)
+```
+
+Use the same logical repository root for each index. A moved checkout is fine;
+changing the root from the repository directory to its `src` directory changes IDs.
+The index includes test files, preserves repeated definitions using occurrence
+suffixes, and propagates parsing/read errors instead of returning a partial index.
+An unexpected duplicate ID raises `ValueError` instead of overwriting an entity.
+
+Snapshots have this envelope (an empty index is shown):
+
+```json
+{
+  "schema_version": 1,
+  "entities": []
+}
+```
+
+Each entity contains every `CodeEntity` field, including all parameter fields.
+Enums are stored as strings and tuples as JSON arrays; loading restores their
+domain types. Entities are saved in sorted ID order with no timestamps or
+checkout-specific root field, making repeated saves deterministic. Loading also
+returns an index ordered by ID; callers should treat indexes as mappings rather
+than rely on the original parser traversal order surviving serialization.
+
+`SnapshotError` (a `ValueError` subclass) reports unsupported schema versions,
+malformed JSON/schema, invalid enum values, invalid line bounds, duplicate JSON
+keys, and duplicate entity IDs. Filesystem errors propagate normally. There are
+no automatic schema migrations yet. Saving requires an existing parent directory;
+it validates first, writes a temporary sibling, then replaces the destination.
+Failed writes/replacements leave the previous snapshot intact. Loading and
+comparison never update the baseline automatically.
+
+Comparison results are immutable dataclasses containing tuples sorted by entity ID:
+
+| Result | Contents | Meaning |
+| --- | --- | --- |
+| `added` | Current `CodeEntity` objects | IDs only in the new index |
+| `removed` | Previous `CodeEntity` objects | IDs only in the old index |
+| `modified` | `EntityChange` objects | Signature or metadata differs |
+| `moved` | `EntityChange` objects | Start or end line differs |
+
+Each `EntityChange` contains `before`, `after`, and `changed_fields`. Metadata
+comparison includes name, qualified name, entity kind, file path, parameters,
+return annotation, decorators, and docstring. Parameter changes include names,
+annotations, defaults, kinds, and order; they are reported under `parameters`.
+Line fields are compared independently. An entity can be both modified and moved;
+a comment inserted above it produces movement alone. Changes to its end line
+also count as movement, even if its start line stays fixed.
+
+Matching is strictly by ID. Renames/file moves appear as removal plus addition.
+Duplicate occurrence IDs retain the ordering limitations described below. Bodies
+are not stored, so a body-only change with unchanged metadata and line bounds is
+not reported. A body-only edit that changes the end line reports movement only.
+This is metadata comparison, not behavioral or Git diff analysis.
 
 ## Checks
 
@@ -76,5 +171,5 @@ The tests also support the standard-library runner:
   definitions are counted by their own full qualified name; parent suffixes
   are not inherited. Inserting, deleting, or reordering duplicate definitions
   can change which definition an occurrence ID identifies.
-- This milestone does not implement documentation parsing, change detection,
-  rename tracking, or AI-driven updates.
+- This milestone does not implement documentation parsing, function-body change
+  detection, Git integration, rename tracking, or AI-driven updates.
