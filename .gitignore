@@ -5,7 +5,7 @@ __pycache__/
 # Virtual environments
 .venv/
 venv/
-
+*.json
 # Test and tool caches
 .pytest_cache/
 .mypy_cache/

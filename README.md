@@ -30,6 +30,45 @@ python -m venv .venv
 Editable installation makes `docguard` importable without setting `PYTHONPATH`.
 Development dependencies are optional; the parser itself uses only the standard library.
 
+## Command-line usage
+
+From PowerShell in the DocGuard directory, create a baseline of a sibling demo
+repository, edit its source, then compare:
+
+```powershell
+.\.venv\Scripts\python.exe -m docguard snapshot ../demo --output baseline.json
+# Edit files in ../demo before running the comparison.
+.\.venv\Scripts\python.exe -m docguard compare baseline.json --root ../demo
+$LASTEXITCODE
+```
+
+Use `.` instead of `../demo` to index DocGuard itself. Paths are relative to the
+terminal's working directory; quote paths containing spaces. No interactive
+Python session is needed.
+
+`snapshot` saves the baseline, replacing an existing output file. Its parent
+directory must exist, and `.py` destinations are rejected to prevent overwriting
+source. `compare` prints entity IDs grouped as `ADDED`, `REMOVED`, `MODIFIED`, and
+`MOVED`; modifications include field names and movement includes old/new line
+bounds. Comparison never updates the baseline. An entity can be both modified
+and moved, so group counts are not a count of unique changed entities.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Snapshot saved, or comparison found no changes |
+| `1` | Comparison found changes, including line-only movement |
+| `2` | Invalid arguments, paths, source, or snapshot; or a filesystem error |
+
+Reports go to stdout; error messages go to stderr without a traceback for expected
+failures. Use the same logical repository root as when creating the baseline.
+Body-only changes remain outside metadata comparison's scope.
+
+```powershell
+.\.venv\Scripts\python.exe -m docguard --help
+.\.venv\Scripts\python.exe -m docguard snapshot --help
+.\.venv\Scripts\python.exe -m docguard compare --help
+```
+
 ## Parse a repository
 
 Run Python from the repository root after installation:
