@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 venv/
 *.json
+!/docguard-map.json
 # Test and tool caches
 .pytest_cache/
 .mypy_cache/
@@ -17,4 +18,4 @@ htmlcov/
 build/
 dist/
 *.egg-info/
-.json/ 
+.json/

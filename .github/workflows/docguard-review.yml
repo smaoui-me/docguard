@@ -1,0 +1,52 @@
+name: DocGuard documentation review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out trusted tool from target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-tool
+          persist-credentials: false
+      - name: Check out proposed source and history as data
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Review committed changes (advisory)
+        working-directory: ${{ runner.temp }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/trusted-tool/src
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TARGET_ROOT: ${{ github.workspace }}/target
+        run: |
+          python -P -m docguard review-git \
+            --root "$TARGET_ROOT" --base "$BASE_SHA" --head "$HEAD_SHA" \
+            --mapping docguard-map.json --format json --advisory \
+            --summary "$RUNNER_TEMP/docguard-summary.md" \
+            > "$RUNNER_TEMP/docguard-report.json"
+          cat "$RUNNER_TEMP/docguard-summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload review report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docguard-review
+          path: |
+            ${{ runner.temp }}/docguard-report.json
+            ${{ runner.temp }}/docguard-summary.md
+          if-no-files-found: error

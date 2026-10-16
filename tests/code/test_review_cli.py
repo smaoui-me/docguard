@@ -10,6 +10,27 @@ from docguard.code.snapshots import save_snapshot
 
 
 class TestReviewCli(unittest.TestCase):
+    def test_json_output_matches_text_findings(self):
+        self.source.write_text(self.original.replace("10", "30"), encoding="utf-8")
+        result = self.run_cli(
+            "review",
+            self.baseline,
+            "--root",
+            self.root,
+            "--mapping",
+            self.mapping,
+            "--format",
+            "json",
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["documents"][0]["document"], "docs/client.md")
+        self.assertEqual(
+            report["documents"][0]["reasons"][0]["changed_fields"], ["parameters"]
+        )
+        self.assertIn("modified: parameters", self.review().stdout)
+
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

@@ -161,6 +161,98 @@ Documentation changes themselves are not compared, so a document already updated
 by a human may still be suggested for review. No Markdown parsing, embeddings,
 LLM, database, or new runtime dependency is used.
 
+## Git revisions and pull-request automation
+
+Git review creates its baseline automatically from the merge base (the common
+ancestor of the target branch and proposed commit). No saved baseline is needed:
+
+```powershell
+.\.venv\Scripts\python.exe -m docguard review-git --root ../demo --base main --head HEAD --mapping docguard-map.json
+```
+
+Run this while `HEAD` names a committed feature branch, or pass an explicit commit
+SHA. `main` is an example target branch name; substitute the branch in your repo.
+Both revisions and their common history must exist locally.
+`--root` must be the actual Git worktree root (linked worktrees are supported),
+not an ordinary subdirectory that Git associates with a parent repository.
+Fetch history if necessary; DocGuard itself never performs a network fetch. Unrelated histories
+or ambiguous merge bases fail. Submodules are not supported and fail explicitly.
+
+Only committed regular files are analyzed. Untracked files, staged changes, and
+unstaged changes are ignored. Symlinks are skipped (a mapped symlink document will
+therefore be missing and fail validation). The command reads Git tree/blob data
+into temporary directories, without changing branches, modifying the index, or
+running target code, Git hooks, or checkout filters. `.gitattributes` export-ignore
+rules do not hide files. Regular files are exported in memory before writing, so
+very large repositories/blobs can require substantial memory. Non-portable paths
+and filesystem collisions fail rather than silently overwrite extracted files.
+
+The mapping is read from the **head commit**; `--mapping` is a path inside that
+commit, not a file from your working directory. Removing a link in the PR can
+suppress a suggestion. This initial version does not audit mapping changes.
+
+### Machine-readable output
+
+Both review commands accept `--format json`:
+
+```powershell
+.\.venv\Scripts\python.exe -m docguard review baseline.json --root ../demo --mapping docguard-map.json --format json
+.\.venv\Scripts\python.exe -m docguard review-git --root ../demo --base main --mapping docguard-map.json --format json
+```
+
+The report has its own `schema_version: 1`, `documents`, `unmapped_added`, and
+`counts` fields. Reasons retain `entity_id`, `change`, and `changed_fields`.
+Git reports additionally contain `git.base`, `git.head`, and `git.merge_base`
+with resolved commit SHAs. JSON goes to stdout without mixed-in progress messages;
+errors go to stderr and return `2`, with no JSON report on failure.
+
+For automation, Git review supports:
+
+```powershell
+.\.venv\Scripts\python.exe -m docguard review-git --root ../demo --base main --mapping docguard-map.json --format json --advisory --summary review-summary.md
+```
+
+`--advisory` returns `0` even when findings exist; errors still return `2`.
+Without it, findings return `1`. `--summary` writes an escaped Markdown/HTML
+summary suitable for a CI job summary. These output options do not change the
+actual findings. Findings are suggestions, not proof of stale documentation.
+
+### GitHub Actions workflow
+
+`.github/workflows/docguard-review.yml` runs on pull requests with read-only
+repository permissions. It checks out the target commit as the trusted tool,
+checks out full proposed history separately, then runs the tool from outside the
+target checkout with Python's safe-path flag. It does not install or execute PR
+source, post comments, or require secrets. It uses Python 3.11 and the standard
+library. The workflow produces a job summary and a `docguard-review` artifact
+containing JSON and Markdown. Errors fail the job; review findings are advisory.
+
+**Bootstrap:** the target branch must already contain this Git-review command.
+The PR introducing it cannot successfully run it from an older target branch.
+Run the local tests for that initial merge; subsequent PRs use the merged tool.
+Actions must be enabled, and GitHub may require approval for fork workflows.
+The workflow is for GitHub.com; hosted execution must be verified in an actual PR.
+
+`docguard-map.json` links the README to selected public DocGuard APIs as an initial
+mapping. It is not a complete coverage map. Python `.py` files are the only code
+language analyzed; documentation can be any existing regular file type, but its
+contents are not interpreted. Body-only changes remain outside the comparison.
+
+### Test Git automation without creating a dummy repository yourself
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/code/test_git_review.py -vv
+.\.venv\Scripts\python.exe -m pytest tests/code/test_reporting.py tests/code/test_review_cli.py -vv
+```
+
+The Git tests create temporary repositories, configure a local test author, make
+real commits/branches, and clean up afterward. They do not commit into this repo
+or contact a Git hosting service. Git must be installed (otherwise the Git tests
+are skipped). Cases include diverging branches, changed signatures, removals,
+unmapped additions, line-only changes, invalid mappings/source/revisions,
+unrelated histories, shallow clones, submodules, dirty worktrees, and advisory
+exit codes. The summary tests check that document names cannot inject markup.
+
 ## Parse a repository
 
 Run Python from the repository root after installation:

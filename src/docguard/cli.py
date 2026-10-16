@@ -1,6 +1,7 @@
 """Command-line access to repository snapshots and metadata comparison."""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -8,7 +9,9 @@ from docguard.code.comparison import compare_snapshots
 from docguard.code.index import index_repository
 from docguard.code.snapshots import load_snapshot, save_snapshot
 from docguard.docs.mapping import load_mapping
+from docguard.docs.reporting import report_document, report_summary, report_text
 from docguard.docs.review import review_documents
+from docguard.git_review import review_git
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,6 +47,29 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Versioned JSON documentation mapping",
     )
+    review.add_argument("--format", choices=("text", "json"), default="text")
+    git_review = commands.add_parser(
+        "review-git", help="Review committed changes against a Git merge base"
+    )
+    git_review.add_argument("--root", type=Path, required=True)
+    git_review.add_argument(
+        "--base", required=True, help="Target branch or commit, available locally"
+    )
+    git_review.add_argument(
+        "--head", default="HEAD", help="Proposed commit (default: HEAD)"
+    )
+    git_review.add_argument(
+        "--mapping", required=True, help="Path inside the head commit"
+    )
+    git_review.add_argument("--format", choices=("text", "json"), default="text")
+    git_review.add_argument(
+        "--summary", type=Path, help="Write an escaped Markdown summary"
+    )
+    git_review.add_argument(
+        "--advisory",
+        action="store_true",
+        help="Return 0 for findings; errors still return 2",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "snapshot":
@@ -57,29 +83,36 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Saved {len(index)} entities to {args.output}")
             return 0
 
+        if args.command == "review-git":
+            result = review_git(args.root, args.base, args.head, args.mapping)
+            if args.summary:
+                args.summary.write_text(report_summary(result.report), encoding="utf-8")
+            if args.format == "json":
+                document = report_document(result.report)
+                document["git"] = {
+                    "base": result.base,
+                    "head": result.head,
+                    "merge_base": result.merge_base,
+                }
+                print(json.dumps(document, indent=2, sort_keys=True))
+            else:
+                print(report_text(result.report))
+            return (
+                0
+                if args.advisory
+                else int(bool(result.report.documents or result.report.unmapped_added))
+            )
+
         before = load_snapshot(args.baseline)
         after = index_repository(args.root)
         if args.command == "review":
             mappings = load_mapping(args.mapping, args.root)
             report = review_documents(mappings, before, after)
-            for document in report.documents:
-                print(f"REVIEW {document.document}")
-                for reason in document.reasons:
-                    details = (
-                        f": {', '.join(reason.changed_fields)}"
-                        if reason.changed_fields
-                        else ""
-                    )
-                    print(f"  {reason.entity_id} {reason.change}{details}")
-            for entity_id in report.unmapped_added:
-                print(f"UNMAPPED ADDED {entity_id}")
-            if not report.documents and not report.unmapped_added:
-                print("No documentation review findings.")
-                return 0
-            print(
-                f"{len(report.documents)} documents to review, {len(report.unmapped_added)} unmapped additions"
-            )
-            return 1
+            if args.format == "json":
+                print(json.dumps(report_document(report), indent=2, sort_keys=True))
+            else:
+                print(report_text(report))
+            return int(bool(report.documents or report.unmapped_added))
         changes = compare_snapshots(before, after)
         if not (changes.added or changes.removed or changes.modified or changes.moved):
             print("No changes detected.")
