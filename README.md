@@ -69,6 +69,98 @@ Body-only changes remain outside metadata comparison's scope.
 .\.venv\Scripts\python.exe -m docguard compare --help
 ```
 
+## Documentation review
+
+DocGuard can track explicit links from documentation files to code entities. It
+suggests documents to review when linked metadata changes or an entity is removed.
+It does not read the document text, prove that documentation is stale, or edit it.
+
+Create documentation inside your target repository (for example,
+`../demo/docs/client.md`) and a mapping file named `docguard-map.json`:
+
+```json
+{
+  "schema_version": 1,
+  "documents": {
+    "docs/client.md": ["client.py:connect", "client.py:close"]
+  }
+}
+```
+
+Use exact IDs from your baseline JSON. Document paths are relative to `--root`,
+not the mapping file's directory. Use normalized forward-slash paths; absolute
+paths, backslashes, `.`/`..` components, missing files, and symlinks resolving
+outside the repository are rejected. The mapping file itself may be outside the
+repository. Each document needs a non-empty array of unique IDs; an empty
+`documents` object is allowed. Several documents may reference the same entity.
+
+Create the baseline before changing source, then review after making changes:
+
+```powershell
+.\.venv\Scripts\python.exe -m docguard snapshot ../demo --output baseline.json
+# Edit a mapped function in ../demo/client.py.
+.\.venv\Scripts\python.exe -m docguard review baseline.json --root ../demo --mapping docguard-map.json
+$LASTEXITCODE
+```
+
+Example output:
+
+```text
+REVIEW docs/client.md
+  client.py:connect modified: parameters
+UNMAPPED ADDED client.py:new_function
+1 documents to review, 1 unmapped additions
+```
+
+Review rules:
+
+| Situation | Result |
+| --- | --- |
+| Linked entity metadata changed | Review document, listing changed fields |
+| Linked entity removed | Review document, with removal reason |
+| Only source line bounds changed | No documentation finding |
+| Newly added entity has no document link | Separate `UNMAPPED ADDED` finding |
+| Newly added entity already has a link | No review finding solely for its addition |
+| Mapped ID absent from both snapshots | Configuration error |
+
+An ID present only in the baseline is a legitimate removal, not a misspelled
+reference. Modified or removed entities without mappings do not trigger document
+review. Unchanged unmapped entities are not reported: this is change impact,
+not a complete documentation coverage audit. A document gets one review entry
+with all relevant reasons, sorted by ID; documents are sorted by path.
+
+For `review`, exit `0` means no review findings, `1` means documents need review
+or new entities are unmapped, and `2` means invalid input or execution failure.
+Unlike `compare`, line-only movement does not cause exit `1`. Errors go to stderr;
+no partial report is printed when validation fails. Source, documentation,
+mapping, and baseline files are never modified by this command.
+
+The library API is also available:
+
+```python
+from docguard.docs.mapping import load_mapping
+from docguard.docs.review import review_documents
+
+mappings = load_mapping(Path("docguard-map.json"), root)
+report = review_documents(mappings, before, after)
+# report.documents: DocumentReview(document, reasons)
+# report.unmapped_added: tuple of entity IDs
+```
+
+Use `load_mapping` to validate document paths and structure, then
+`review_documents` to validate entity references and calculate impact. The latter
+performs no filesystem reads. Mapping validation raises `MappingError`, a
+`ValueError` subclass; filesystem errors propagate normally. The current mapping
+describes both snapshots, so keep references to removed entities until their
+documentation has been reviewed. Once the baseline is refreshed, remove obsolete
+links or they will correctly become unknown references.
+
+Limitations: manual links require maintenance; renames appear as removal/addition;
+duplicate occurrence suffixes can shift; body-only changes are not detected.
+Documentation changes themselves are not compared, so a document already updated
+by a human may still be suggested for review. No Markdown parsing, embeddings,
+LLM, database, or new runtime dependency is used.
+
 ## Parse a repository
 
 Run Python from the repository root after installation:
@@ -210,5 +302,5 @@ The tests also support the standard-library runner:
   definitions are counted by their own full qualified name; parent suffixes
   are not inherited. Inserting, deleting, or reordering duplicate definitions
   can change which definition an occurrence ID identifies.
-- This milestone does not implement documentation parsing, function-body change
+- This milestone does not implement document-content parsing, function-body change
   detection, Git integration, rename tracking, or AI-driven updates.

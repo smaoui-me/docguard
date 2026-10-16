@@ -7,6 +7,8 @@ from pathlib import Path
 from docguard.code.comparison import compare_snapshots
 from docguard.code.index import index_repository
 from docguard.code.snapshots import load_snapshot, save_snapshot
+from docguard.docs.mapping import load_mapping
+from docguard.docs.review import review_documents
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,6 +33,17 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Same logical repository root used for the baseline",
     )
+    review = commands.add_parser(
+        "review", help="Find documentation needing review after code changes"
+    )
+    review.add_argument("baseline", type=Path, help="Previously saved snapshot")
+    review.add_argument("--root", type=Path, required=True, help="Repository root")
+    review.add_argument(
+        "--mapping",
+        type=Path,
+        required=True,
+        help="Versioned JSON documentation mapping",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "snapshot":
@@ -46,6 +59,27 @@ def main(argv: list[str] | None = None) -> int:
 
         before = load_snapshot(args.baseline)
         after = index_repository(args.root)
+        if args.command == "review":
+            mappings = load_mapping(args.mapping, args.root)
+            report = review_documents(mappings, before, after)
+            for document in report.documents:
+                print(f"REVIEW {document.document}")
+                for reason in document.reasons:
+                    details = (
+                        f": {', '.join(reason.changed_fields)}"
+                        if reason.changed_fields
+                        else ""
+                    )
+                    print(f"  {reason.entity_id} {reason.change}{details}")
+            for entity_id in report.unmapped_added:
+                print(f"UNMAPPED ADDED {entity_id}")
+            if not report.documents and not report.unmapped_added:
+                print("No documentation review findings.")
+                return 0
+            print(
+                f"{len(report.documents)} documents to review, {len(report.unmapped_added)} unmapped additions"
+            )
+            return 1
         changes = compare_snapshots(before, after)
         if not (changes.added or changes.removed or changes.modified or changes.moved):
             print("No changes detected.")
