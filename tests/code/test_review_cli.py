@@ -24,7 +24,8 @@ class TestReviewCli(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1, result.stderr)
         report = json.loads(result.stdout)
-        self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["schema_version"], 2)
+        self.assertEqual(report["removed_links"], [])
         self.assertEqual(report["documents"][0]["document"], "docs/client.md")
         self.assertEqual(
             report["documents"][0]["reasons"][0]["changed_fields"], ["parameters"]

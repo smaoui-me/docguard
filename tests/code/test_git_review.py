@@ -90,11 +90,14 @@ class TestGitReview(unittest.TestCase):
         result = self.cli("--format", "json")
         self.assertEqual(result.returncode, 1, result.stderr)
         document = json.loads(result.stdout)
-        self.assertEqual(document["schema_version"], 1)
+        self.assertEqual(document["schema_version"], 2)
         self.assertEqual(
             document["git"], {"base": self.base, "head": head, "merge_base": self.base}
         )
-        self.assertEqual(document["counts"], {"documents": 1, "unmapped_added": 1})
+        self.assertEqual(
+            document["counts"],
+            {"documents": 1, "unmapped_added": 1, "removed_links": 0},
+        )
         self.assertEqual(
             document["documents"][0]["reasons"],
             [
@@ -199,11 +202,78 @@ class TestGitReview(unittest.TestCase):
         self.assertEqual(result.report.documents, ())
         self.assertEqual(result.report.unmapped_added, ())
 
-    def test_head_mapping_used_and_mapping_removal_can_suppress_findings(self):
+    def test_mapping_removal_cannot_silently_suppress_findings(self):
         self.source.write_text(self.original.replace("10", "30"), encoding="utf-8")
         self.mapping.write_text('{"schema_version":1,"documents":{}}', encoding="utf-8")
         self.commit("change mapping and code")
+        report = self.review().report
+        self.assertEqual(report.documents, ())
+        self.assertEqual(
+            [link.entity_id for link in report.removed_links],
+            ["client.py:close", "client.py:connect"],
+        )
+        result = self.cli("--format", "json")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["counts"]["removed_links"], 2)
+        self.assertEqual(self.cli("--advisory").returncode, 0)
+
+    def test_link_removal_with_unchanged_code_reports_in_text_and_summary(self):
+        data = json.loads(self.mapping.read_text(encoding="utf-8"))
+        data["documents"]["docs/client.md"].remove("client.py:connect")
+        self.mapping.write_text(json.dumps(data), encoding="utf-8")
+        self.commit("remove one link")
+        summary = self.root.parent / "removed-links.md"
+        result = self.cli("--summary", str(summary))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        expected = "REMOVED LINK docs/client.md -> client.py:connect"
+        self.assertIn(expected, result.stdout)
+        self.assertIn(
+            "REMOVED LINK docs/client.md -&gt; client.py:connect",
+            summary.read_text(encoding="utf-8"),
+        )
         self.assertEqual(self.review().report.documents, ())
+
+    def test_deleted_document_and_its_links_are_reported(self):
+        (self.root / "docs/client.md").unlink()
+        self.mapping.write_text('{"schema_version":1,"documents":{}}', encoding="utf-8")
+        self.commit("remove documentation")
+        report = self.review().report
+        self.assertEqual(len(report.removed_links), 2)
+        self.assertTrue(
+            all(link.document == "docs/client.md" for link in report.removed_links)
+        )
+
+    def test_new_mapping_without_baseline_mapping_is_supported(self):
+        original = self.mapping.read_bytes()
+        self.mapping.unlink()
+        base = self.commit("before mapping introduced")
+        self.mapping.write_bytes(original)
+        self.source.write_text(self.original.replace("10", "30"), encoding="utf-8")
+        self.commit("introduce mapping")
+        report = self.review(base=base).report
+        self.assertEqual(report.removed_links, ())
+        self.assertEqual(len(report.documents), 1)
+
+    def test_invalid_baseline_mapping_fails_explicitly(self):
+        original = self.mapping.read_bytes()
+        self.mapping.write_text("{", encoding="utf-8")
+        base = self.commit("invalid baseline mapping")
+        self.mapping.write_bytes(original)
+        self.commit("repair mapping")
+        with self.assertRaisesRegex(ValueError, "Invalid mapping"):
+            self.review(base=base)
+
+    def test_mapping_changes_only_on_target_branch_are_not_reported(self):
+        self.git("checkout", "-b", "feature")
+        self.source.write_text("# Comment\n" + self.original, encoding="utf-8")
+        head = self.commit("feature comment")
+        self.git("checkout", "main")
+        (self.root / "docs/extra.md").write_text("Extra docs", encoding="utf-8")
+        data = json.loads(self.mapping.read_text(encoding="utf-8"))
+        data["documents"]["docs/extra.md"] = ["client.py:connect"]
+        self.mapping.write_text(json.dumps(data), encoding="utf-8")
+        target = self.commit("target adds mapping")
+        self.assertFalse(self.review(base=target, head=head).report.has_findings)
 
     def test_source_is_never_executed_and_export_ignore_does_not_hide_files(self):
         marker = self.root / "executed.txt"

@@ -187,9 +187,35 @@ rules do not hide files. Regular files are exported in memory before writing, so
 very large repositories/blobs can require substantial memory. Non-portable paths
 and filesystem collisions fail rather than silently overwrite extracted files.
 
-The mapping is read from the **head commit**; `--mapping` is a path inside that
-commit, not a file from your working directory. Removing a link in the PR can
-suppress a suggestion. This initial version does not audit mapping changes.
+Current review links are read from the **head commit**; `--mapping` is a path
+inside that commit, not a file from your working directory. Git review also loads
+the mapping at the same path in the **merge-base commit** and reports removed
+document-to-entity links. Removing a mapping can no longer silently produce a
+clean report. Links are compared by exact document path and entity ID, not order.
+
+For example, removing `client.py:connect` from the links for `docs/client.md`
+produces this finding even when the code itself is unchanged:
+
+```text
+REMOVED LINK docs/client.md -> client.py:connect
+```
+
+These findings appear in text, JSON, and the CI summary. They return exit `1`
+unless `--advisory` is enabled. They mean coverage changed, not that removal was
+necessarily wrong. Moving a link to a renamed document still reports the old
+link's removal; rename inference is not implemented. A document removed together
+with its mapping is also reported, using the baseline document path.
+
+The baseline mapping is validated against baseline document files; head mappings
+are validated against head files and the before/after entity indexes. Historical
+entity IDs are compared literally for removal auditing, so deleting a stale old
+reference still produces a finding. A missing baseline mapping is allowed for
+first-time adoption. A malformed baseline mapping is an error rather than an
+assumed empty mapping. Deleting the entire head mapping file remains an error.
+Use the same mapping path across both commits; mapping-file renames are not
+inferred. Removing a link produces a separate finding, not a metadata reason
+against that formerly linked document. Links added only on the target branch
+after the merge base do not count as removals in the proposed branch.
 
 ### Machine-readable output
 
@@ -200,8 +226,13 @@ Both review commands accept `--format json`:
 .\.venv\Scripts\python.exe -m docguard review-git --root ../demo --base main --mapping docguard-map.json --format json
 ```
 
-The report has its own `schema_version: 1`, `documents`, `unmapped_added`, and
-`counts` fields. Reasons retain `entity_id`, `change`, and `changed_fields`.
+The report has its own `schema_version: 2`, `documents`, `unmapped_added`,
+`removed_links`, and `counts` fields. Each removed link has `document` and
+`entity_id`; `counts.removed_links` counts edges, not documents. Reasons retain
+`entity_id`, `change`, and `changed_fields`. Snapshot and mapping schemas remain
+version 1. Consumers that check report versions must now accept version 2.
+The local `review` command has no historical mapping to compare, so its
+`removed_links` array is empty. Only `review-git` audits historical links.
 Git reports additionally contain `git.base`, `git.head`, and `git.merge_base`
 with resolved commit SHAs. JSON goes to stdout without mixed-in progress messages;
 errors go to stderr and return `2`, with no JSON report on failure.
@@ -243,6 +274,7 @@ contents are not interpreted. Body-only changes remain outside the comparison.
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/code/test_git_review.py -vv
 .\.venv\Scripts\python.exe -m pytest tests/code/test_reporting.py tests/code/test_review_cli.py -vv
+.\.venv\Scripts\python.exe -m pytest tests/code/test_mapping_changes.py -vv
 ```
 
 The Git tests create temporary repositories, configure a local test author, make
@@ -252,6 +284,9 @@ are skipped). Cases include diverging branches, changed signatures, removals,
 unmapped additions, line-only changes, invalid mappings/source/revisions,
 unrelated histories, shallow clones, submodules, dirty worktrees, and advisory
 exit codes. The summary tests check that document names cannot inject markup.
+Mapping-change tests cover deleted documents, shared links, renamed documents,
+unchanged code with removed links, reordered lists, first-time mappings, invalid
+baseline mappings, and target-branch-only mapping changes.
 
 ## Parse a repository
 

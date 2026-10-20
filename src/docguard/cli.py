@@ -97,11 +97,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(document, indent=2, sort_keys=True))
             else:
                 print(report_text(result.report))
-            return (
-                0
-                if args.advisory
-                else int(bool(result.report.documents or result.report.unmapped_added))
-            )
+            return 0 if args.advisory else int(result.report.has_findings)
 
         before = load_snapshot(args.baseline)
         after = index_repository(args.root)
@@ -112,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(report_document(report), indent=2, sort_keys=True))
             else:
                 print(report_text(report))
-            return int(bool(report.documents or report.unmapped_added))
+            return int(report.has_findings)
         changes = compare_snapshots(before, after)
         if not (changes.added or changes.removed or changes.modified or changes.moved):
             print("No changes detected.")

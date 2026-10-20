@@ -22,9 +22,35 @@ class DocumentReview:
 
 
 @dataclass(frozen=True)
+class RemovedLink:
+    document: str
+    entity_id: str
+
+
+@dataclass(frozen=True)
 class ReviewReport:
     documents: tuple[DocumentReview, ...]
     unmapped_added: tuple[str, ...]
+    removed_links: tuple[RemovedLink, ...] = ()
+
+    @property
+    def has_findings(self) -> bool:
+        return bool(self.documents or self.unmapped_added or self.removed_links)
+
+
+def removed_mapping_links(
+    before: Sequence[DocumentMapping], after: Sequence[DocumentMapping]
+) -> tuple[RemovedLink, ...]:
+    """Compare explicit edges, independent of source changes or document contents."""
+    old = {
+        (item.document, entity_id) for item in before for entity_id in item.entity_ids
+    }
+    new = {
+        (item.document, entity_id) for item in after for entity_id in item.entity_ids
+    }
+    return tuple(
+        RemovedLink(document, entity_id) for document, entity_id in sorted(old - new)
+    )
 
 
 def review_documents(

@@ -1,13 +1,13 @@
 """Review committed Git trees without switching branches or executing target code."""
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from tempfile import TemporaryDirectory
 
 from docguard.code.index import index_repository
 from docguard.docs.mapping import load_mapping
-from docguard.docs.review import ReviewReport, review_documents
+from docguard.docs.review import ReviewReport, removed_mapping_links, review_documents
 
 
 class GitReviewError(ValueError):
@@ -138,5 +138,13 @@ def review_git(root: Path, base: str, head: str, mapping: str) -> GitReview:
         _export_tree(root, head_sha, new)
         before, after = index_repository(old), index_repository(new)
         mappings = load_mapping(new / mapping_path, new)
+        # The mapping may be introduced for the first time by this PR.
+        baseline_mapping = old / mapping_path
+        old_mappings = (
+            load_mapping(baseline_mapping, old) if baseline_mapping.exists() else ()
+        )
         report = review_documents(mappings, before, after)
+        report = replace(
+            report, removed_links=removed_mapping_links(old_mappings, mappings)
+        )
     return GitReview(base_sha, head_sha, bases[0], report)
