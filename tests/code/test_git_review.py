@@ -12,6 +12,29 @@ from docguard.git_review import GitReviewError, review_git
 
 @unittest.skipUnless(shutil.which("git"), "Git must be installed")
 class TestGitReview(unittest.TestCase):
+    def test_body_change_triggers_document_review_in_json_and_text(self):
+        self.source.write_text(
+            self.original.replace(
+                "connect(timeout=10): pass", "connect(timeout=10): return timeout"
+            ),
+            encoding="utf-8",
+        )
+        self.commit("change function body")
+        result = self.cli("--format", "json")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(
+            report["documents"][0]["reasons"],
+            [
+                {
+                    "entity_id": "client.py:connect",
+                    "change": "modified",
+                    "changed_fields": ["body"],
+                }
+            ],
+        )
+        self.assertIn("client.py:connect modified: body", self.cli().stdout)
+
     def setUp(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

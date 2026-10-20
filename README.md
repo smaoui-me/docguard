@@ -61,7 +61,7 @@ and moved, so group counts are not a count of unique changed entities.
 
 Reports go to stdout; error messages go to stderr without a traceback for expected
 failures. Use the same logical repository root as when creating the baseline.
-Body-only changes remain outside metadata comparison's scope.
+Function and method body changes are reported as `body` changes.
 
 ```powershell
 .\.venv\Scripts\python.exe -m docguard --help
@@ -72,7 +72,7 @@ Body-only changes remain outside metadata comparison's scope.
 ## Documentation review
 
 DocGuard can track explicit links from documentation files to code entities. It
-suggests documents to review when linked metadata changes or an entity is removed.
+suggests documents to review when linked metadata or function bodies change, or an entity is removed.
 It does not read the document text, prove that documentation is stale, or edit it.
 
 Create documentation inside your target repository (for example,
@@ -117,6 +117,7 @@ Review rules:
 | Situation | Result |
 | --- | --- |
 | Linked entity metadata changed | Review document, listing changed fields |
+| Linked function/method body changed | Review document, with `body` reason |
 | Linked entity removed | Review document, with removal reason |
 | Only source line bounds changed | No documentation finding |
 | Newly added entity has no document link | Separate `UNMAPPED ADDED` finding |
@@ -156,7 +157,8 @@ documentation has been reviewed. Once the baseline is refreshed, remove obsolete
 links or they will correctly become unknown references.
 
 Limitations: manual links require maintenance; renames appear as removal/addition;
-duplicate occurrence suffixes can shift; body-only changes are not detected.
+duplicate occurrence suffixes can shift; body fingerprints detect syntax changes,
+not whether two implementations behave equivalently.
 Documentation changes themselves are not compared, so a document already updated
 by a human may still be suggested for review. No Markdown parsing, embeddings,
 LLM, database, or new runtime dependency is used.
@@ -229,8 +231,9 @@ Both review commands accept `--format json`:
 The report has its own `schema_version: 2`, `documents`, `unmapped_added`,
 `removed_links`, and `counts` fields. Each removed link has `document` and
 `entity_id`; `counts.removed_links` counts edges, not documents. Reasons retain
-`entity_id`, `change`, and `changed_fields`. Snapshot and mapping schemas remain
-version 1. Consumers that check report versions must now accept version 2.
+`entity_id`, `change`, and `changed_fields`. Snapshot schema is now version 2;
+mapping schema remains version 1. Report consumers must accept version 2 and
+the `body` change reason.
 The local `review` command has no historical mapping to compare, so its
 `removed_links` array is empty. Only `review-git` audits historical links.
 Git reports additionally contain `git.base`, `git.head`, and `git.merge_base`
@@ -267,7 +270,8 @@ The workflow is for GitHub.com; hosted execution must be verified in an actual P
 `docguard-map.json` links the README to selected public DocGuard APIs as an initial
 mapping. It is not a complete coverage map. Python `.py` files are the only code
 language analyzed; documentation can be any existing regular file type, but its
-contents are not interpreted. Body-only changes remain outside the comparison.
+contents are not interpreted. Function and method bodies are fingerprinted;
+module-level statements and class bodies do not receive fingerprints.
 
 ### Test Git automation without creating a dummy repository yourself
 
@@ -351,7 +355,7 @@ Snapshots have this envelope (an empty index is shown):
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entities": []
 }
 ```
@@ -377,7 +381,7 @@ Comparison results are immutable dataclasses containing tuples sorted by entity 
 | --- | --- | --- |
 | `added` | Current `CodeEntity` objects | IDs only in the new index |
 | `removed` | Previous `CodeEntity` objects | IDs only in the old index |
-| `modified` | `EntityChange` objects | Signature or metadata differs |
+| `modified` | `EntityChange` objects | Signature, metadata, or function body differs |
 | `moved` | `EntityChange` objects | Start or end line differs |
 
 Each `EntityChange` contains `before`, `after`, and `changed_fields`. Metadata
@@ -389,10 +393,45 @@ a comment inserted above it produces movement alone. Changes to its end line
 also count as movement, even if its start line stays fixed.
 
 Matching is strictly by ID. Renames/file moves appear as removal plus addition.
-Duplicate occurrence IDs retain the ordering limitations described below. Bodies
-are not stored, so a body-only change with unchanged metadata and line bounds is
-not reported. A body-only edit that changes the end line reports movement only.
-This is metadata comparison, not behavioral or Git diff analysis.
+Duplicate occurrence IDs retain the ordering limitations described below.
+
+## Function-body change detection
+
+Functions, methods, async functions, and async methods store `body_fingerprint`,
+a SHA-256 digest of their normalized Python AST body. Source positions, comments,
+whitespace, quote style, and redundant parentheses do not affect it. The function's
+own leading docstring is excluded because docstring changes already have their
+own reason. Signatures and decorators are also compared separately.
+
+Changing `return price` to `return price * 1.2` now reports `body`, even if line
+numbers and the signature stay identical. The reason flows through comparison,
+documentation review, JSON, and Git/CI reports. Line movement remains independent.
+No code is executed and no body source text is stored in snapshots.
+
+Nested definitions are part of their enclosing function's body, so a nested
+function change can flag both functions. Nested docstring/signature edits can also
+change the outer fingerprint. Class entities have a null fingerprint; their methods
+are tracked individually. An explicit null means no fingerprint is available;
+manually constructed entities with null fingerprints cannot reveal body changes.
+This detects structural syntax differences, not semantic equivalence or changes
+to dependencies/global state. Use the same Python version to generate compared
+snapshots: Python AST representations can change across interpreter releases.
+Git review generates both indexes in one process.
+
+**Snapshot compatibility:** version 1 snapshots are rejected with instructions to
+regenerate the baseline from its original source revision using the current parser.
+The old snapshot has no body data from which to calculate a fingerprint. Do not
+simply change its version number or recreate it from already-modified source.
+`review-git` needs no snapshot migration because it parses both revisions afresh.
+Snapshot and report schemas are version 2; mapping files stay version 1.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/code/test_body_fingerprints.py -vv
+.\.venv\Scripts\python.exe -m pytest tests/code/test_git_review.py -k body_change -vv
+```
+
+Only Python is currently parsed. Other languages would need a parser that emits
+the same entity model and a language-appropriate body normalization method.
 
 ## Checks
 
@@ -429,5 +468,5 @@ The tests also support the standard-library runner:
   definitions are counted by their own full qualified name; parent suffixes
   are not inherited. Inserting, deleting, or reordering duplicate definitions
   can change which definition an occurrence ID identifies.
-- This milestone does not implement document-content parsing, function-body change
-  detection, Git integration, rename tracking, or AI-driven updates.
+- This milestone does not implement document-content parsing, semantic equivalence
+  analysis, rename tracking, or AI-driven updates.

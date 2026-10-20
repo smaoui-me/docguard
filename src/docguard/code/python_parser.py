@@ -5,6 +5,7 @@ never need to interact with Python's internal `ast` structures directly.
 """
 
 import ast
+import hashlib
 from pathlib import Path
 
 from docguard.code.models import CodeEntity, EntityKind, Parameter, ParameterKind
@@ -101,6 +102,7 @@ class _EntityVisitor(ast.NodeVisitor):
                     ast.unparse(decorator) for decorator in node.decorator_list
                 ),
                 return_annotation=ast.unparse(node.returns) if node.returns else None,
+                body_fingerprint=_body_fingerprint(node),
             )
         )
         self.scope_stack.append((node.name, False))
@@ -167,3 +169,23 @@ class _EntityVisitor(ast.NodeVisitor):
             )
             for argument, default, kind in arguments
         )
+
+
+def _body_fingerprint(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Hash structural syntax without locations, formatting, or the own docstring.
+
+    Nested definitions are part of the enclosing body. This detects syntax
+    changes, not semantic equivalence; use the same Python version for snapshots.
+    """
+    body = node.body
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    normalized = ast.dump(
+        ast.Module(body=body, type_ignores=[]), include_attributes=False
+    )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()

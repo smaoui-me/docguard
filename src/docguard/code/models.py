@@ -45,3 +45,4 @@ class CodeEntity:
     docstring: str | None
     decorators: tuple[str, ...]
     return_annotation: str | None = None
+    body_fingerprint: str | None = None

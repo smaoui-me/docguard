@@ -39,7 +39,7 @@ def compare_snapshots(
     """Return ID-sorted changes. An entity may be both modified and moved.
 
     Movement means changed source line bounds, not a rename or a file move.
-    Body-only edits are not detectable from the current metadata model.
+    Function body fingerprints are compared independently of metadata and lines.
     """
     for index in (before, after):
         for key, entity in index.items():
@@ -58,6 +58,8 @@ def compare_snapshots(
             for field in METADATA_FIELDS
             if getattr(old, field) != getattr(new, field)
         )
+        if old.body_fingerprint != new.body_fingerprint:
+            metadata += ("body",)
         locations = tuple(
             field
             for field in LOCATION_FIELDS

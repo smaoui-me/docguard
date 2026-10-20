@@ -119,12 +119,12 @@ class TestSnapshotComparison(unittest.TestCase):
             ("end_line",),
         )
 
-    def test_body_only_changes_are_out_of_scope(self):
+    def test_body_only_changes_are_reported(self):
         new = _parse_source(
             "def f(value: int = 1) -> int:\n    return value + 1\n", "module.py"
         )[0]
         result = compare_snapshots(self.before, {new.id: new})
-        self.assertEqual(result.modified, ())
+        self.assertEqual(result.modified[0].changed_fields, ("body",))
         self.assertEqual(result.moved, ())
 
     def test_invalid_index_keys_are_rejected(self):

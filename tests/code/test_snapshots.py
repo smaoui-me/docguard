@@ -36,7 +36,7 @@ class TestSnapshots(unittest.TestCase):
             restored = load_snapshot(path)
             self.assertEqual(restored, self.index)
             self.assertEqual(
-                json.loads(path.read_text(encoding="utf-8"))["schema_version"], 1
+                json.loads(path.read_text(encoding="utf-8"))["schema_version"], 2
             )
             self.assertIn("Café", path.read_text(encoding="utf-8"))
             for entity in restored.values():
@@ -62,7 +62,7 @@ class TestSnapshots(unittest.TestCase):
             save_snapshot(self.index, path)
             baseline = json.loads(path.read_text(encoding="utf-8"))
             cases = []
-            for version in (2, True, "1", None):
+            for version in (1, 3, True, "2", None):
                 cases.append({**baseline, "schema_version": version})
             cases.extend(
                 [[], {}, {**baseline, "extra": 1}, {**baseline, "entities": {}}]
@@ -77,6 +77,9 @@ class TestSnapshots(unittest.TestCase):
                 ("parameters", {}),
                 ("docstring", 9),
                 ("return_annotation", 7),
+                ("body_fingerprint", 42),
+                ("body_fingerprint", "invalid"),
+                ("body_fingerprint", "A" * 64),
             ):
                 document = copy.deepcopy(baseline)
                 document["entities"][0][field] = value

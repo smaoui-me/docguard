@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import asdict, fields
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import cast
 
 from docguard.code.models import CodeEntity, EntityKind, Parameter, ParameterKind
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class SnapshotError(ValueError):
@@ -60,6 +61,11 @@ def _entity(value: object) -> CodeEntity:
     start, end = _line(data["start_line"]), _line(data["end_line"])
     if end < start:
         raise SnapshotError("end_line cannot precede start_line")
+    fingerprint = _optional_string(data["body_fingerprint"])
+    if fingerprint is not None and re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None:
+        raise SnapshotError(
+            "body_fingerprint must be a lowercase SHA-256 hex digest or null"
+        )
     return CodeEntity(
         id=_string(data["id"]),
         name=_string(data["name"]),
@@ -72,6 +78,7 @@ def _entity(value: object) -> CodeEntity:
         docstring=_optional_string(data["docstring"]),
         decorators=tuple(_string(item) for item in _list(data["decorators"])),
         return_annotation=_optional_string(data["return_annotation"]),
+        body_fingerprint=fingerprint,
     )
 
 
@@ -79,7 +86,10 @@ def _decode(value: object) -> dict[str, CodeEntity]:
     data = _object(value, {"schema_version", "entities"})
     version = data["schema_version"]
     if type(version) is not int or version != SCHEMA_VERSION:
-        raise SnapshotError(f"Unsupported snapshot schema version: {version!r}")
+        raise SnapshotError(
+            f"Unsupported snapshot schema version: {version!r}; expected 2. "
+            "Regenerate the baseline from its original source revision with the current parser."
+        )
     index: dict[str, CodeEntity] = {}
     try:
         for item in _list(data["entities"]):
@@ -139,7 +149,7 @@ def save_snapshot(index: Mapping[str, CodeEntity], path: Path) -> None:
 
 
 def load_snapshot(path: Path) -> dict[str, CodeEntity]:
-    """Load a v1 snapshot, restoring enums and tuples; reject malformed data."""
+    """Load a v2 snapshot, restoring enums and tuples; reject malformed data."""
     try:
         document = json.loads(
             path.read_text(encoding="utf-8"), object_pairs_hook=_unique_object
