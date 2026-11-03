@@ -1,0 +1,85 @@
+schema_version = 1
+
+[[cases]]
+id = "httpx_3378_authentic"
+repository_url = "https://github.com/encode/httpx"
+pr_url = "https://github.com/encode/httpx/pull/3378"
+base = "12be5c44caa7a34bfe19f82eace5150ddeba2612"
+head = "86efecb3baf715c26d6a5c50b5b5a13df855661f"
+license_path = "LICENSE.md"
+document_path = "docs/api.md"
+section = "## `Request`"
+variant = "authentic_head"
+prefix = ""
+source_paths = ["httpx/_models.py"]
+entity_ids = ["httpx/_models.py:Request.__init__"]
+expected_action = "unchanged"
+expected_detection = true
+review_status = "provisional author review; independent human review pending"
+rationale = "The authentic Request section uses a string GET example and makes no claim that byte method inputs are accepted; removing byte input support does not contradict it."
+required_patterns = []
+forbidden_patterns = []
+preserve = ["## `Request`", "https://example.org"]
+
+[[cases]]
+id = "httpx_3378_stale_claim"
+repository_url = "https://github.com/encode/httpx"
+pr_url = "https://github.com/encode/httpx/pull/3378"
+base = "12be5c44caa7a34bfe19f82eace5150ddeba2612"
+head = "86efecb3baf715c26d6a5c50b5b5a13df855661f"
+license_path = "LICENSE.md"
+document_path = "docs/api.md"
+section = "## `Request`"
+variant = "authored_stale_claim"
+prefix = "The method argument accepts both str and bytes. Byte methods are decoded as ASCII before uppercasing.\n\n"
+source_paths = ["httpx/_models.py"]
+entity_ids = ["httpx/_models.py:Request.__init__"]
+expected_action = "revise"
+expected_detection = true
+review_status = "provisional author review; independent human review pending"
+rationale = "The authored stale claim is supported by the base implementation, but HEAD removes byte decoding and restricts the method annotation to str."
+required_patterns = ["method.*(?:str|string)|(?:str|string).*method"]
+forbidden_patterns = ["accepts both str and bytes", "Byte methods are decoded as ASCII"]
+preserve = ["## `Request`", "https://example.org"]
+
+[[cases]]
+id = "httpx_3364_authentic"
+repository_url = "https://github.com/encode/httpx"
+pr_url = "https://github.com/encode/httpx/pull/3364"
+base = "6f9b50990dad9645a6f9dc0e1eb90af0a6474c3b"
+head = "bf5758388619afdc957722ca8a9a4ff255df6866"
+license_path = "LICENSE.md"
+document_path = "docs/api.md"
+section = "## `Request`"
+variant = "authentic_head"
+prefix = ""
+source_paths = ["httpx/_models.py", "httpx/_urls.py"]
+entity_ids = ["httpx/_models.py:Request.__init__", "httpx/_urls.py:URL.__init__", "httpx/_urls.py:URL.copy_merge_params"]
+expected_action = "unchanged"
+expected_detection = true
+review_status = "provisional author review; independent human review pending"
+rationale = "The authentic Request section lists params but does not claim existing URL query parameters will be merged. The mapped Request and URL helpers establish the relevant change without requiring an edit to these existing claims."
+required_patterns = []
+forbidden_patterns = []
+preserve = ["## `Request`", "https://example.org"]
+
+[[cases]]
+id = "httpx_3364_dependency_ablation"
+repository_url = "https://github.com/encode/httpx"
+pr_url = "https://github.com/encode/httpx/pull/3364"
+base = "6f9b50990dad9645a6f9dc0e1eb90af0a6474c3b"
+head = "bf5758388619afdc957722ca8a9a4ff255df6866"
+license_path = "LICENSE.md"
+document_path = "docs/api.md"
+section = "## `Request`"
+variant = "dependency_ablation"
+prefix = "Supplying params to Request merges them with any query parameters already in the URL.\n\n"
+source_paths = ["httpx/_models.py"]
+entity_ids = ["httpx/_models.py:Request.__init__"]
+expected_action = "needs_review"
+expected_detection = true
+review_status = "provisional author review; independent human review pending"
+rationale = "This authored merge-behavior claim plus deliberate omission of URL helper evidence tests abstention. It is not an authentic upstream documentation defect."
+required_patterns = []
+forbidden_patterns = []
+preserve = ["## `Request`", "https://example.org"]

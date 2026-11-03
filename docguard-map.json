@@ -9,6 +9,29 @@
       "src/docguard/code/comparison.py:compare_snapshots",
       "src/docguard/docs/mapping.py:load_mapping",
       "src/docguard/docs/review.py:review_documents"
+    ],
+    "docs/upstream-evaluation.md": [
+      "src/docguard/ai/upstream.py:evaluate_pr",
+      "src/docguard/ai/upstream.py:materialize_case",
+      "src/docguard/ai/upstream.py:summarize"
+    ],
+    "docs/git-proposals.md": [
+      "src/docguard/ai/git_proposals.py:suggest_git",
+      "src/docguard/ai/git_proposals.py:prepare_git_documents",
+      "src/docguard/ai/git_proposals.py:apply_git_proposal",
+      "src/docguard/ai/dataset.py:evaluate_dataset",
+      "src/docguard/git_review.py:git_trees"
+    ],
+    "docs/groq-evaluation.md": [
+      "src/docguard/ai/config.py:load_config",
+      "src/docguard/ai/provider.py:generate",
+      "src/docguard/ai/evaluation.py:evaluate"
+    ],
+    "docs/ai-workflow.md": [
+      "src/docguard/ai/proposals.py:prepare_documents",
+      "src/docguard/ai/proposals.py:suggest",
+      "src/docguard/ai/proposals.py:apply_proposal",
+      "src/docguard/ai/provider.py:generate"
     ]
   }
 }

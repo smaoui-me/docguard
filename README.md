@@ -4,7 +4,19 @@ A self-healing technical documentation tool.
 
 Requires Python 3.11 or newer.
 
-## Current milestone: repository indexes, snapshots, and metadata comparison
+## Current milestone: AI-assisted documentation proposals
+
+DocGuard can now generate documentation proposals, show a diff, and explicitly
+apply a selected edit after checking for stale files. Start with the no-key demo
+and exact commands in [the AI workflow guide](docs/ai-workflow.md).
+Generation uses Groq or OpenAI; dry-run, preview, apply, and normal tests work offline.
+
+Git-based proposals now include before/after source and validated evidence references.
+See [Git proposals and the 30-case evaluation corpus](docs/git-proposals.md) for
+the demo, live/offline commands, limitations, and guidance on curating real PRs.
+
+A pinned HTTPX pilot now exercises actual PR code and documentation, with authentic
+and controlled variants reported separately. See [upstream PR evaluation](docs/upstream-evaluation.md).
 
 DocGuard extracts immutable entities for classes, functions, methods, and their
 async variants. Metadata includes qualified names, source lines, annotations,
@@ -468,5 +480,11 @@ The tests also support the standard-library runner:
   definitions are counted by their own full qualified name; parent suffixes
   are not inherited. Inserting, deleting, or reordering duplicate definitions
   can change which definition an occurrence ID identifies.
-- This milestone does not implement document-content parsing, semantic equivalence
-  analysis, rename tracking, or AI-driven updates.
+- This milestone does not implement semantic equivalence analysis, rename tracking,
+  automatic AI pull requests, or language parsers beyond Python. AI proposals are
+  reviewed edits, not proof of documentation correctness.
+
+Groq and OpenAI configuration plus live model evaluations are documented in
+[the Groq evaluation guide](docs/groq-evaluation.md). Run
+`python -m docguard evaluate-ai --output evaluation-offline.json` for offline
+fixtures; add `--live` to evaluate the configured model using synthetic cases.

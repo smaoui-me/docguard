@@ -19,3 +19,11 @@ build/
 dist/
 *.egg-info/
 .json/
+.docguard-demo/
+.docguard-demo-*/
+.docguard-upstream/
+
+# Local credentials (keep the template versioned)
+.env
+.env.*
+!.env.example

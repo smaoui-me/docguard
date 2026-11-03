@@ -1,6 +1,8 @@
 """Review committed Git trees without switching branches or executing target code."""
 
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from tempfile import TemporaryDirectory
@@ -98,13 +100,18 @@ class GitReview:
     report: ReviewReport
 
 
-def review_git(root: Path, base: str, head: str, mapping: str) -> GitReview:
-    """Review merge-base(base, head) against head, using head's committed mapping.
+@dataclass(frozen=True)
+class GitTrees:
+    base: str
+    head: str
+    merge_base: str
+    old: Path
+    new: Path
 
-    Uncommitted changes and untracked files are intentionally ignored. History
-    must be available locally; this function never fetches from the network.
-    root must be the actual worktree root, not a directory inside another repo.
-    """
+
+@contextmanager
+def git_trees(root: Path, base: str, head: str) -> Iterator[GitTrees]:
+    """Export pinned commits without a checkout, network fetch, or code execution."""
     root = root.resolve(strict=True)
     discovered_root = Path(
         _git(root, "rev-parse", "--show-toplevel").decode("utf-8").strip()
@@ -114,7 +121,6 @@ def review_git(root: Path, base: str, head: str, mapping: str) -> GitReview:
             f"Expected a Git repository root: {root}; Git found parent repository "
             f"{discovered_root}. Pass that root explicitly if it is intended."
         )
-    mapping_path = _relative_path(mapping)
     base_sha = (
         _git(root, "rev-parse", "--verify", "--end-of-options", f"{base}^{{commit}}")
         .decode()
@@ -136,6 +142,14 @@ def review_git(root: Path, base: str, head: str, mapping: str) -> GitReview:
         new.mkdir()
         _export_tree(root, bases[0], old)
         _export_tree(root, head_sha, new)
+        yield GitTrees(base_sha, head_sha, bases[0], old, new)
+
+
+def review_git(root: Path, base: str, head: str, mapping: str) -> GitReview:
+    """Review merge-base against committed head; ignore working-tree changes."""
+    mapping_path = _relative_path(mapping)
+    with git_trees(root, base, head) as trees:
+        old, new = trees.old, trees.new
         before, after = index_repository(old), index_repository(new)
         mappings = load_mapping(new / mapping_path, new)
         # The mapping may be introduced for the first time by this PR.
@@ -147,4 +161,4 @@ def review_git(root: Path, base: str, head: str, mapping: str) -> GitReview:
         report = replace(
             report, removed_links=removed_mapping_links(old_mappings, mappings)
         )
-    return GitReview(base_sha, head_sha, bases[0], report)
+    return GitReview(trees.base, trees.head, trees.merge_base, report)
