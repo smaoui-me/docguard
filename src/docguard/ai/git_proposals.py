@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from docguard.ai.config import AIConfig
+from docguard.ai.evidence import EVIDENCE_VERSION, DependencyEvidence
 from docguard.ai.files import (
     ProposalError,
     array,
@@ -70,9 +71,15 @@ def _evidence(
 
 
 def prepare_git_documents(
-    trees: GitTrees, mapping: str, selected: Sequence[str] = (), max_documents: int = 3
+    trees: GitTrees,
+    mapping: str,
+    selected: Sequence[str] = (),
+    max_documents: int = 3,
+    evidence_policy: str = "mapped",
 ) -> tuple[str, tuple[PreparedDocument, ...], dict[str, object]]:
     """Preflight bounded before/after evidence for every selected document."""
+    if evidence_policy not in {"mapped", "direct"}:
+        raise ProposalError("Unknown evidence policy")
     mapping_path = relative_path(mapping)
     before, after = index_repository(trees.old), index_repository(trees.new)
     mappings = load_mapping(trees.new / mapping_path, trees.new)
@@ -92,6 +99,14 @@ def prepare_git_documents(
             trees.new, baseline, trees.new / mapping_path, selected, max_documents
         )
     links = {item.document: item.entity_ids for item in mappings}
+    collectors = (
+        {
+            "before": DependencyEvidence(trees.old, before),
+            "after": DependencyEvidence(trees.new, after),
+        }
+        if evidence_policy == "direct"
+        else {}
+    )
     enriched: list[PreparedDocument] = []
     for document in documents:
         evidence: list[dict[str, object]] = []
@@ -144,6 +159,33 @@ def prepare_git_documents(
         context["limitations"] = (
             "Before and after snippets are provided for mapped entities only. Imports, globals and dependencies may be missing. Judge the HEAD document against HEAD source; request review for claims whose effects cannot be verified. Renames are not inferred."
         )
+        if evidence_policy == "direct":
+            context["evidence_selection"] = {
+                "policy": "direct",
+                "version": EVIDENCE_VERSION,
+                "max_depth": 2,
+                "max_items_per_side": 12,
+            }
+            context["limitations"] = (
+                "Mapped entities plus bounded static references are supplied. Literal assignments describe initialization, not guaranteed runtime values. Dynamic dispatch, external dependencies and omitted references remain uncertain; use needs_review when missing evidence prevents verifying a claim. No runtime behavior or rename is inferred."
+            )
+            issues: list[dict[str, str]] = []
+            for side, revision in (("before", trees.merge_base), ("after", trees.head)):
+                available = max(
+                    0,
+                    MAX_CONTEXT_CHARS
+                    - len(json.dumps(context, ensure_ascii=False))
+                    - 7000,
+                )
+                additions, missing = collectors[side].expand(
+                    list(links[document.document]),
+                    side,
+                    revision,
+                    max_chars=min(8000, available),
+                )
+                evidence.extend(additions)
+                issues.extend(missing)
+            context["evidence_gaps"] = issues
         if len(json.dumps(context, ensure_ascii=False)) > MAX_CONTEXT_CHARS:
             raise ProposalError(
                 "Git evidence exceeds context limit; narrow the document mapping"
@@ -178,6 +220,7 @@ def suggest_git(
     dry_run: bool = False,
     selected: Sequence[str] = (),
     max_documents: int = 3,
+    evidence_policy: str = "mapped",
     generator: Callable[[str, dict[str, object]], object] | None = None,
 ) -> int:
     if (
@@ -189,7 +232,7 @@ def suggest_git(
         raise ProposalError("Output must be a new .json file in an existing directory")
     with git_trees(root, base, head) as trees:
         source_hash, prepared, review = prepare_git_documents(
-            trees, mapping, selected, max_documents
+            trees, mapping, selected, max_documents, evidence_policy
         )
         provenance = {
             "base": trees.base,
@@ -201,7 +244,9 @@ def suggest_git(
             write_new_json(
                 output,
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
+                    "evidence_policy": evidence_policy,
+                    "evidence_version": EVIDENCE_VERSION,
                     "kind": "docguard.ai.git-requests",
                     "git_prompt_version": GIT_PROMPT_VERSION,
                     "git": provenance,
@@ -254,7 +299,9 @@ def suggest_git(
         write_new_json(
             output,
             {
-                "schema_version": 1,
+                "schema_version": 2,
+                "evidence_policy": evidence_policy,
+                "evidence_version": EVIDENCE_VERSION,
                 "kind": "docguard.ai.git-proposals",
                 "git_prompt_version": GIT_PROMPT_VERSION,
                 "git": provenance,
@@ -271,8 +318,14 @@ def suggest_git(
 def apply_git_proposal(
     path: Path, root: Path, document: str, check: bool = False
 ) -> str:
+    raw = parse_json(read_bytes(path, 10_000_000).decode("utf-8"))
+    extra = (
+        {"evidence_policy", "evidence_version"}
+        if isinstance(raw, dict) and raw.get("schema_version") == 2
+        else set()
+    )
     data = object_fields(
-        parse_json(read_bytes(path, 10_000_000).decode("utf-8")),
+        raw,
         {
             "schema_version",
             "kind",
@@ -283,14 +336,21 @@ def apply_git_proposal(
             "source_tree_sha256",
             "review",
             "proposals",
-        },
+        }
+        | extra,
     )
     if (
         type(data["schema_version"]) is not int
-        or data["schema_version"] != 1
+        or data["schema_version"] not in {1, 2}
         or data["kind"] != "docguard.ai.git-proposals"
     ):
         raise ProposalError("Expected a version 1 Git proposal artifact")
+    evidence_policy = string(data.get("evidence_policy", "mapped"))
+    if extra and (
+        type(data["evidence_version"]) is not int
+        or data["evidence_version"] != EVIDENCE_VERSION
+    ):
+        raise ProposalError("Evidence selector version changed; regenerate proposal")
     provenance = object_fields(data["git"], {"base", "head", "merge_base", "mapping"})
     head = string(provenance["head"])
     if _git(root, "rev-parse", "HEAD").decode().strip() != head:
@@ -318,7 +378,7 @@ def apply_git_proposal(
                 raise ProposalError("Invalid Git proposal")
             names.append(string(proposal.get("document")))
         source_hash, prepared, _ = prepare_git_documents(
-            trees, string(provenance["mapping"]), names, 20
+            trees, string(provenance["mapping"]), names, 20, evidence_policy
         )
         if data["source_tree_sha256"] != source_hash:
             raise ProposalError("Proposal source digest does not match committed HEAD")

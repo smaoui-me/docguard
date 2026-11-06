@@ -136,3 +136,48 @@ def test_usage_reports_only_nonnegative_integer_token_counts():
         ).encode()
         generate("test", {}, provider="groq", api_key="key", usage_sink=captured.append)
         assert captured[-1] == {}
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, None),
+        ("7", 7),
+        ("0", 0),
+        ("invalid", None),
+        ("-1", None),
+        ("NaN", None),
+        ("inf", None),
+        ("Wed, 21 Oct 2015 07:28:00 GMT", 0),
+    ],
+)
+def test_retry_after_parsing(value, expected):
+    from docguard.ai.provider import retry_after_seconds
+
+    assert retry_after_seconds(value) == expected
+
+
+def test_retry_after_future_http_date():
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    from docguard.ai.provider import retry_after_seconds
+
+    value = format_datetime(
+        datetime.now(timezone.utc) + timedelta(seconds=30), usegmt=True
+    )
+    assert 28 <= retry_after_seconds(value) <= 30
+
+
+def test_http_error_retains_only_safe_retry_metadata():
+    from docguard.ai.provider import ProviderError
+
+    error = HTTPError(
+        "https://api.groq.com", 429, "private", {"Retry-After": "12"}, None
+    )
+    with patch("docguard.ai.provider.build_opener") as builder:
+        builder.return_value.open.side_effect = error
+        with pytest.raises(ProviderError) as raised:
+            generate("test", {}, provider="groq", api_key="private-key")
+    assert raised.value.retry_after == 12
+    assert "private" not in str(raised.value)

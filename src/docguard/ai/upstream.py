@@ -7,24 +7,27 @@ import subprocess
 import tomllib
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from time import monotonic
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from time import monotonic, sleep
 from typing import Any
 
 from docguard.ai.config import AIConfig
+from docguard.ai.evidence import EVIDENCE_VERSION
 from docguard.ai.files import (
     ProposalError,
     digest,
+    parse_json,
     read_bytes,
     relative_path,
-    write_new_json,
 )
 from docguard.ai.git_proposals import apply_git_proposal, suggest_git
+from docguard.ai.preservation import PRESERVATION_VERSION, inspect_preservation
 from docguard.ai.provider import (
     GIT_PROMPT_VERSION,
     PROMPT_VERSION,
     ProviderError,
     generate,
+    request_payload,
 )
 
 
@@ -58,6 +61,7 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
     ):
         raise ProposalError("Expected version 1 upstream manifest")
     seen: set[str] = set()
+    groups: dict[str, str] = {}
     for case in data["cases"]:
         if not isinstance(case, dict):
             raise ProposalError("Invalid upstream case")
@@ -81,6 +85,20 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
         if not re.fullmatch(r"[a-z0-9_]+", case["id"]) or case["id"] in seen:
             raise ProposalError("Invalid or duplicate case ID")
         seen.add(case["id"])
+        if case.get("evidence_policy", "mapped") not in ("mapped", "direct"):
+            raise ProposalError("Unknown evidence policy")
+        split = case.get("split", "development")
+        group = case.get("group", case["pr_url"])
+        if (
+            split not in {"development", "held_out"}
+            or not isinstance(group, str)
+            or not group
+        ):
+            raise ProposalError("Invalid benchmark split/group")
+        for grouping in (case["pr_url"], case["repository_url"] + ":" + group):
+            if grouping in groups and groups[grouping] != split:
+                raise ProposalError("Related PR cases cannot cross dataset splits")
+            groups[grouping] = split
         if any(
             not re.fullmatch(r"[a-f0-9]{40}|[a-f0-9]{64}", case[key])
             for key in ("base", "head")
@@ -132,6 +150,8 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
             or Path(case["document_path"]).suffix != ".md"
         ):
             raise ProposalError("Pilot supports Python source and Markdown documents")
+        if not isinstance(case.get("base_section", case["section"]), str):
+            raise ProposalError("base_section must be a string")
         for pattern in case["required_patterns"] + case["forbidden_patterns"]:
             re.compile(pattern)
     return data["cases"]  # type: ignore[no-any-return]
@@ -226,7 +246,12 @@ def materialize_case(
         sources[side] = hashes
         doc_revision = case["base"] if case["variant"] == "base_docs" else case[side]
         full_doc = _blob(repository, doc_revision, case["document_path"])
-        selected, start, end = extract_section(full_doc, case["section"])
+        selected, start, end = extract_section(
+            full_doc,
+            case.get("base_section", case["section"])
+            if doc_revision == case["base"]
+            else case["section"],
+        )
         document = case["prefix"].encode("utf-8") + selected
         target = root / relative_path(case["document_path"])
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -312,6 +337,24 @@ def summarize(rows: list[dict[str, Any]], selected: int) -> dict[str, object]:
     }
 
 
+def _checkpoint(path: Path, report: dict[str, object]) -> None:
+    """Replace a report only after the entire next checkpoint is on disk."""
+    temporary = None
+    try:
+        with NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="\n", dir=path.parent, delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            json.dump(report, stream, ensure_ascii=False, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def evaluate_pr(
     config: AIConfig,
     repository: Path,
@@ -322,28 +365,203 @@ def evaluate_pr(
     live: bool = False,
     max_requests: int = 3,
     generator: Callable[[str, dict[str, object]], object] | None = None,
+    resume: bool = False,
+    max_retries: int = 2,
+    max_retry_wait: float = 30,
 ) -> dict[str, object]:
+    """Single-writer evaluation. A hard crash can leave a lock for manual inspection."""
+    lock = output.with_name(output.name + ".lock")
+    try:
+        stream = lock.open("x")
+    except FileExistsError:
+        raise ProposalError(
+            "Evaluation is locked; check for another process before removing its .lock file"
+        ) from None
+    try:
+        with stream:
+            stream.write(str(os.getpid()))
+        return _evaluate_pr(
+            config,
+            repository,
+            manifest,
+            output,
+            selected=selected,
+            live=live,
+            max_requests=max_requests,
+            generator=generator,
+            resume=resume,
+            max_retries=max_retries,
+            max_retry_wait=max_retry_wait,
+        )
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _evaluate_pr(
+    config: AIConfig,
+    repository: Path,
+    manifest: Path,
+    output: Path,
+    *,
+    selected: Sequence[str] = (),
+    live: bool = False,
+    max_requests: int = 3,
+    generator: Callable[[str, dict[str, object]], object] | None = None,
+    resume: bool = False,
+    max_retries: int = 2,
+    max_retry_wait: float = 30,
+) -> dict[str, object]:
+    if not 0 <= max_retries <= 5 or not 0 <= max_retry_wait <= 60:
+        raise ProposalError("Retry bounds: 0..5 retries and 0..60 seconds wait")
     if (
-        output.exists()
+        (output.exists() != resume)
         or output.is_symlink()
         or output.suffix.lower() != ".json"
         or not output.parent.is_dir()
     ):
-        raise ProposalError("Output must be a new .json file")
+        raise ProposalError(
+            "Output must be a new .json file, or an existing report with --resume"
+        )
     cases = load_manifest(manifest)
     if set(selected) - {c["id"] for c in cases}:
         raise ProposalError("Unknown upstream case")
     cases = [c for c in cases if not selected or c["id"] in selected]
     if not cases or not 1 <= max_requests <= 100:
         raise ProposalError("Select cases and a request budget between 1 and 100")
-    if live and (
-        len(cases) > max_requests or (not config.api_key.strip() and generator is None)
-    ):
-        raise ProposalError(
-            "Live mode requires credentials and a request budget covering selected cases"
-        )
+    if live and not config.api_key.strip() and generator is None:
+        raise ProposalError("Live mode requires credentials")
+    identity = {
+        "manifest_sha256": digest(read_bytes(manifest)),
+        "cases": [case["id"] for case in cases],
+        "provider": config.provider,
+        "model": config.model,
+        "mode": "injected-test"
+        if generator
+        else "live"
+        if live
+        else "preparation-only",
+        "prompt_version": PROMPT_VERSION,
+        "git_prompt_version": GIT_PROMPT_VERSION,
+        "request_sha256": digest(
+            json.dumps(
+                request_payload(config.model, {"evidence": []}, config.provider),
+                sort_keys=True,
+            ).encode()
+        ),
+        "suite": "upstream-pr-pilot-v2",
+        "evidence_version": EVIDENCE_VERSION,
+        "preservation_version": PRESERVATION_VERSION,
+    }
     results: list[dict[str, Any]] = []
+    attempts: list[dict[str, Any]] = []
     calls = 0
+    session_calls = 0
+    if resume:
+        previous = parse_json(read_bytes(output, limit=100_000_000).decode("utf-8"))
+        if not isinstance(previous, dict) or previous.get("identity") != identity:
+            raise ProposalError(
+                "Resume configuration mismatch: dataset, selection, mode, provider, model or prompt changed"
+            )
+        results = previous.get("results", [])
+        attempts = previous.get("attempts", [])
+        if (
+            not isinstance(results, list)
+            or not isinstance(attempts, list)
+            or any(not isinstance(row, dict) for row in results)
+            or [row.get("case") for row in results] != identity["cases"]
+        ):
+            raise ProposalError("Invalid checkpoint results")
+        if any(not isinstance(attempt, dict) for attempt in attempts):
+            raise ProposalError("Invalid checkpoint attempts")
+        statuses = {
+            "not_run",
+            "prepared",
+            "running",
+            "api_error",
+            "validation_error",
+            "completed",
+        }
+        try:
+            for saved_row, case in zip(results, cases):
+                if (
+                    saved_row.get("status") not in statuses
+                    or not isinstance(saved_row.get("provenance"), dict)
+                    or saved_row["provenance"].get("variant") != case["variant"]
+                    or saved_row.get("expected_action") != case["expected_action"]
+                    or saved_row.get("expected_detection") != case["expected_detection"]
+                ):
+                    raise ValueError
+                if saved_row["status"] == "completed" and (
+                    saved_row.get("action")
+                    not in {"revise", "unchanged", "needs_review"}
+                    or type(saved_row.get("automatic_pass")) is not bool
+                    or not isinstance(saved_row.get("checks"), dict)
+                    or not isinstance(saved_row.get("proposal"), dict)
+                ):
+                    raise ValueError
+            for attempt in attempts:
+                if attempt.get("case") not in identity["cases"] or attempt.get(
+                    "status"
+                ) not in {"in_flight", "response_received", "api_error"}:
+                    raise ValueError
+            summarize(results, len(cases))
+        except (ValueError, TypeError, KeyError):
+            raise ProposalError("Invalid checkpoint results or attempts") from None
+        calls = len(attempts)
+
+    def checkpoint() -> dict[str, object]:
+        report: dict[str, object] = {
+            "schema_version": 2,
+            "identity": identity,
+            "attempts": attempts,
+            "session_requests": session_calls,
+            "suite": "upstream-pr-pilot-v2",
+            "mode": "injected-test"
+            if generator
+            else "live"
+            if live
+            else "preparation-only",
+            "provider": config.provider,
+            "model": config.model,
+            "prompt_version": PROMPT_VERSION,
+            "git_prompt_version": GIT_PROMPT_VERSION,
+            "manifest_sha256": identity["manifest_sha256"],
+            "selected": len(cases),
+            "not_run": sum(row["status"] == "not_run" for row in results),
+            "api_requests": calls if live and generator is None else 0,
+            "errors": sum(r["status"].endswith("error") for r in results),
+            "metrics": summarize(results, len(cases)),
+            "metrics_by_variant": {
+                variant: summarize(
+                    [row for row in results if row["provenance"]["variant"] == variant],
+                    sum(case["variant"] == variant for case in cases),
+                )
+                for variant in sorted({case["variant"] for case in cases})
+            },
+            "model_seconds": round(
+                sum(attempt.get("seconds", 0.0) for attempt in attempts), 3
+            ),
+            "token_usage": {
+                key: sum(
+                    entry[key]
+                    for attempt in attempts
+                    for entry in (attempt.get("token_usage") or [])
+                    if key in entry
+                )
+                if any(
+                    key in entry
+                    for attempt in attempts
+                    for entry in (attempt.get("token_usage") or [])
+                )
+                else None
+                for key in ("input_tokens", "output_tokens", "total_tokens")
+            },
+            "cost_usd": None,
+            "results": results,
+        }
+        _checkpoint(output, report)
+        return report
+
     with TemporaryDirectory(prefix="docguard-upstream-") as directory:
         prepared = []
         # Pin and preflight every input before the first paid call.
@@ -361,10 +579,31 @@ def evaluate_pr(
                 requests_path,
                 config,
                 dry_run=True,
+                evidence_policy=case.get("evidence_policy", "mapped"),
             )
             requests = json.loads(requests_path.read_text(encoding="utf-8"))
             prepared.append((case, root, provenance, commits, requests))
+        if not results:
+            results.extend(
+                {
+                    "case": case["id"],
+                    "status": "not_run",
+                    "provenance": provenance,
+                    "detected": bool(requests["requests"]),
+                    "expected_action": case["expected_action"],
+                    "expected_detection": case["expected_detection"],
+                }
+                for case, root, provenance, commits, requests in prepared
+            )
+        checkpoint()
         for case, root, provenance, commits, requests in prepared:
+            position = next(
+                i for i, row in enumerate(results) if row["case"] == case["id"]
+            )
+            if results[position]["status"] in {"completed", "validation_error"}:
+                continue
+            if session_calls >= max_requests:
+                break
             row: dict[str, Any] = {
                 "case": case["id"],
                 "expected_action": case["expected_action"],
@@ -381,32 +620,74 @@ def evaluate_pr(
                     "accepted": None,
                 },
             }
+            results[position] = row
             if not live and generator is None:
                 row["requests"] = requests["requests"]
-                results.append(row)
+                checkpoint()
                 continue
             usage: list[dict[str, int]] = []
             started = monotonic()
             model_seconds = 0.0
 
             def produce(model: str, context: dict[str, object]) -> object:
-                nonlocal calls, model_seconds
-                if calls >= max_requests:
-                    raise ProposalError("Request budget exhausted")
-                calls += 1
-                timestamp = monotonic()
+                nonlocal calls, session_calls, model_seconds
                 try:
-                    value = (
-                        generator(model, context)
-                        if generator
-                        else generate(
-                            model,
-                            context,
-                            provider=config.provider,
-                            api_key=config.api_key,
-                            usage_sink=usage.append,
-                        )
-                    )
+                    for retry in range(max_retries + 1):
+                        if session_calls >= max_requests:
+                            raise ProposalError("Request budget exhausted")
+                        calls += 1
+                        session_calls += 1
+                        attempt: dict[str, Any] = {
+                            "case": case["id"],
+                            "status": "in_flight",
+                        }
+                        attempts.append(attempt)
+                        row["status"] = "running"
+                        checkpoint()
+                        attempt_started = monotonic()
+                        usage_start = len(usage)
+                        try:
+                            value = (
+                                generator(model, context)
+                                if generator
+                                else generate(
+                                    model,
+                                    context,
+                                    provider=config.provider,
+                                    api_key=config.api_key,
+                                    usage_sink=usage.append,
+                                )
+                            )
+                            attempt["status"] = "response_received"
+                            break
+                        except ProviderError as error:
+                            delay = (
+                                error.retry_after
+                                if error.retry_after is not None
+                                else float(2**retry)
+                            )
+                            attempt.update(
+                                status="api_error",
+                                http_status=error.status,
+                                seconds=round(monotonic() - attempt_started, 3),
+                            )
+                            checkpoint()
+                            if (
+                                error.status != 429
+                                or retry == max_retries
+                                or session_calls >= max_requests
+                                or delay > max_retry_wait
+                            ):
+                                raise
+                            attempt["retry_delay_seconds"] = delay
+                            checkpoint()
+                            sleep(delay)
+                        finally:
+                            attempt.setdefault(
+                                "seconds", round(monotonic() - attempt_started, 3)
+                            )
+                            attempt["token_usage"] = usage[usage_start:] or None
+                            checkpoint()
                     # Distinguish a provider response from a validated citation set.
                     from docguard.ai.git_proposals import validate_citations
 
@@ -420,7 +701,11 @@ def evaluate_pr(
                         row["citations_valid"] = True
                     return value
                 finally:
-                    model_seconds += monotonic() - timestamp
+                    model_seconds = sum(
+                        a.get("seconds", 0.0)
+                        for a in attempts
+                        if a["case"] == case["id"]
+                    )
 
             try:
                 artifact = Path(directory) / f"{case['id']}-proposal.json"
@@ -433,6 +718,7 @@ def evaluate_pr(
                     artifact,
                     config,
                     generator=produce,
+                    evidence_policy=case.get("evidence_policy", "mapped"),
                 )
                 bundle = json.loads(artifact.read_text(encoding="utf-8"))
                 proposals = bundle["proposals"]
@@ -452,6 +738,9 @@ def evaluate_pr(
                 if decision["action"] == "revise":
                     text = decision["content"]
                     assert isinstance(text, str)
+                    row["preservation"] = inspect_preservation(
+                        original.decode("utf-8"), text
+                    )
                     checks["required_claims"] = all(
                         re.search(p, text, re.I | re.S)
                         for p in case["required_patterns"]
@@ -491,69 +780,10 @@ def evaluate_pr(
                 model_seconds=round(model_seconds, 3),
                 token_usage=usage or None,
             )
-            results.append(row)
-            if row.get("http_status") in {401, 403, 429}:
+            checkpoint()
+            if (
+                row.get("http_status") in {401, 403, 429}
+                or session_calls >= max_requests
+            ):
                 break
-        finished = {row["case"] for row in results}
-        for case, root, provenance, commits, requests in prepared:
-            if case["id"] not in finished:
-                results.append(
-                    {
-                        "case": case["id"],
-                        "status": "not_run",
-                        "expected_action": case["expected_action"],
-                        "expected_detection": case["expected_detection"],
-                        "detected": bool(requests["requests"]),
-                        "provenance": provenance,
-                        "review_status": case["review_status"],
-                        "reason": "Stopped after an operational API error",
-                    }
-                )
-    report: dict[str, object] = {
-        "schema_version": 1,
-        "suite": "upstream-pr-pilot-v1",
-        "mode": "injected-test"
-        if generator
-        else "live"
-        if live
-        else "preparation-only",
-        "provider": config.provider,
-        "model": config.model,
-        "prompt_version": PROMPT_VERSION,
-        "git_prompt_version": GIT_PROMPT_VERSION,
-        "manifest_sha256": digest(read_bytes(manifest)),
-        "selected": len(cases),
-        "not_run": sum(row["status"] == "not_run" for row in results),
-        "api_requests": calls if live and generator is None else 0,
-        "errors": sum(r["status"].endswith("error") for r in results),
-        "metrics": summarize(results, len(cases)),
-        "metrics_by_variant": {
-            variant: summarize(
-                [row for row in results if row["provenance"]["variant"] == variant],
-                sum(case["variant"] == variant for case in cases),
-            )
-            for variant in sorted({case["variant"] for case in cases})
-        },
-        "model_seconds": round(
-            sum(row.get("model_seconds", 0.0) for row in results), 3
-        ),
-        "token_usage": {
-            key: sum(
-                entry[key]
-                for row in results
-                for entry in (row.get("token_usage") or [])
-                if key in entry
-            )
-            if any(
-                key in entry
-                for row in results
-                for entry in (row.get("token_usage") or [])
-            )
-            else None
-            for key in ("input_tokens", "output_tokens", "total_tokens")
-        },
-        "cost_usd": None,
-        "results": results,
-    }
-    write_new_json(output, report)
-    return report
+    return checkpoint()

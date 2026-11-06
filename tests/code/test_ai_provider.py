@@ -55,7 +55,7 @@ class TestAIProvider(unittest.TestCase):
         )
         payload = json.loads(request.data)
         self.assertFalse(payload["store"])
-        self.assertEqual(payload["max_output_tokens"], 12000)
+        self.assertEqual(payload["max_output_tokens"], 2048 + len(context["document_text"].encode("utf-8")))
         self.assertNotIn("test-key-not-real", json.dumps(payload))
         self.assertIn("untrusted", payload["instructions"])
         self.assertNotIn("tools", payload)

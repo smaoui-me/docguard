@@ -185,3 +185,14 @@ The first command covers all 30 fixtures, merge-base selection, dirty working tr
 citation forgery, original-text tampering, stale files, no-op/no-network runs,
 Windows line endings, split/budget validation, and rate-limit stopping. Existing
 Git tests continue to cover invalid revisions, ancestry, submodules and parse failures.
+
+
+## Optional dependency evidence
+
+`suggest-git --evidence-policy direct` expands mapped function/method snippets with
+bounded local dependencies. `mapped` remains the default and preserves the
+original evaluation scope. See [evidence selection and human review](evidence-and-review.md).
+Git request/proposal artifacts now use schema version 2 with an evidence policy
+and selector version. Apply still accepts legacy schema-1 mapped artifacts. New
+artifacts reconstruct evidence using their recorded policy; a changed selector
+version requires regenerating the proposal.

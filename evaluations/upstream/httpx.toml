@@ -1,6 +1,8 @@
 schema_version = 1
 
 [[cases]]
+split = "development"
+group = "httpx_request_constructor"
 id = "httpx_3378_authentic"
 repository_url = "https://github.com/encode/httpx"
 pr_url = "https://github.com/encode/httpx/pull/3378"
@@ -22,6 +24,8 @@ forbidden_patterns = []
 preserve = ["## `Request`", "https://example.org"]
 
 [[cases]]
+split = "development"
+group = "httpx_request_constructor"
 id = "httpx_3378_stale_claim"
 repository_url = "https://github.com/encode/httpx"
 pr_url = "https://github.com/encode/httpx/pull/3378"
@@ -43,6 +47,8 @@ forbidden_patterns = ["accepts both str and bytes", "Byte methods are decoded as
 preserve = ["## `Request`", "https://example.org"]
 
 [[cases]]
+split = "development"
+group = "httpx_request_constructor"
 id = "httpx_3364_authentic"
 repository_url = "https://github.com/encode/httpx"
 pr_url = "https://github.com/encode/httpx/pull/3364"
@@ -64,6 +70,8 @@ forbidden_patterns = []
 preserve = ["## `Request`", "https://example.org"]
 
 [[cases]]
+split = "development"
+group = "httpx_request_constructor"
 id = "httpx_3364_dependency_ablation"
 repository_url = "https://github.com/encode/httpx"
 pr_url = "https://github.com/encode/httpx/pull/3364"
@@ -83,3 +91,101 @@ rationale = "This authored merge-behavior claim plus deliberate omission of URL 
 required_patterns = []
 forbidden_patterns = []
 preserve = ["## `Request`", "https://example.org"]
+
+[[cases]]
+repository_url = "https://github.com/encode/httpx"
+license_path = "LICENSE.md"
+document_path = "docs/compatibility.md"
+prefix = ""
+expected_detection = true
+review_status = "source and documentation inspected by implementation author; independent human review pending"
+required_patterns = []
+forbidden_patterns = []
+preserve = ["## Request Content", "httpx.post(..., content=b\"Hello, world\")"]
+split = "development"
+evidence_policy = "mapped"
+id = "httpx_1573_authentic_head"
+pr_url = "https://github.com/encode/httpx/pull/1573"
+base = "073a3284abbcecad68033053acf595ff749800a7"
+head = "963d2984be4963257cb53c3f14797caf33a0c4ea"
+section = "## Request Content"
+variant = "authentic_head"
+source_paths = ["httpx/_content.py"]
+entity_ids = ["httpx/_content.py:encode_request", "httpx/_content.py:encode_content"]
+expected_action = "unchanged"
+group = "httpx_request_content"
+rationale = "HEAD encode_request emits DeprecationWarning for non-dictionary data. HEAD docs already mention it; base docs only mention type-checker warnings and compatibility support, omitting the newly observable runtime warning."
+
+[[cases]]
+repository_url = "https://github.com/encode/httpx"
+license_path = "LICENSE.md"
+document_path = "docs/compatibility.md"
+prefix = ""
+expected_detection = true
+review_status = "source and documentation inspected by implementation author; independent human review pending"
+required_patterns = ["deprecat", "content"]
+forbidden_patterns = []
+preserve = ["## Request Content", "httpx.post(..., content=b\"Hello, world\")"]
+split = "development"
+evidence_policy = "mapped"
+id = "httpx_1573_base_docs"
+pr_url = "https://github.com/encode/httpx/pull/1573"
+base = "073a3284abbcecad68033053acf595ff749800a7"
+head = "963d2984be4963257cb53c3f14797caf33a0c4ea"
+section = "## Request Content"
+variant = "base_docs"
+source_paths = ["httpx/_content.py"]
+entity_ids = ["httpx/_content.py:encode_request", "httpx/_content.py:encode_content"]
+expected_action = "revise"
+group = "httpx_request_content"
+rationale = "HEAD encode_request emits DeprecationWarning for non-dictionary data. HEAD docs already mention it; base docs only mention type-checker warnings and compatibility support, omitting the newly observable runtime warning."
+
+[[cases]]
+repository_url = "https://github.com/encode/httpx"
+license_path = "LICENSE.md"
+document_path = "docs/compatibility.md"
+prefix = ""
+expected_detection = true
+review_status = "source and documentation inspected by implementation author; independent human review pending"
+required_patterns = []
+forbidden_patterns = []
+preserve = []
+split = "development"
+evidence_policy = "mapped"
+id = "httpx_1808_authentic_head"
+pr_url = "https://github.com/encode/httpx/pull/1808"
+base = "0b4a83257bef85559d91b466e4ac94a216a25485"
+head = "9f5f582cdd8602c730dfbdf1d2d6275fecb4c7ff"
+section = "## Redirects"
+base_section = "## HEAD redirection"
+variant = "authentic_head"
+source_paths = ["httpx/_api.py", "httpx/_client.py"]
+entity_ids = ["httpx/_api.py:head", "httpx/_client.py:BaseClient.__init__"]
+expected_action = "unchanged"
+group = "httpx_redirect_defaults"
+rationale = "The HEAD API and client defaults change redirect following from true to false and rename the parameter. The old HEAD-redirection section claims redirects are followed by default; the new Redirects section states the new opt-in behavior."
+
+[[cases]]
+repository_url = "https://github.com/encode/httpx"
+license_path = "LICENSE.md"
+document_path = "docs/compatibility.md"
+prefix = ""
+expected_detection = true
+review_status = "source and documentation inspected by implementation author; independent human review pending"
+required_patterns = ["(?:not|no longer|doesn.t).*follow|follow.*(?:False|disabled|opt.in)"]
+forbidden_patterns = []
+preserve = []
+split = "development"
+evidence_policy = "mapped"
+id = "httpx_1808_base_docs"
+pr_url = "https://github.com/encode/httpx/pull/1808"
+base = "0b4a83257bef85559d91b466e4ac94a216a25485"
+head = "9f5f582cdd8602c730dfbdf1d2d6275fecb4c7ff"
+section = "## HEAD redirection"
+base_section = "## HEAD redirection"
+variant = "base_docs"
+source_paths = ["httpx/_api.py", "httpx/_client.py"]
+entity_ids = ["httpx/_api.py:head", "httpx/_client.py:BaseClient.__init__"]
+expected_action = "revise"
+group = "httpx_redirect_defaults"
+rationale = "The HEAD API and client defaults change redirect following from true to false and rename the parameter. The old HEAD-redirection section claims redirects are followed by default; the new Redirects section states the new opt-in behavior."

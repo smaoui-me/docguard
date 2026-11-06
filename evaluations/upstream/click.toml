@@ -1,0 +1,47 @@
+schema_version = 1
+
+[[cases]]
+repository_url = "https://github.com/pallets/click"
+pr_url = "https://github.com/pallets/click/pull/3239"
+base = "60cad4ad6583bf885c62d6f4597f3555d1ee1a0f"
+head = "a683017931b5bcb211e18685fa623e968727aa3b"
+license_path = "LICENSE.txt"
+document_path = "docs/options.md"
+section = "## Flag Value"
+prefix = ""
+source_paths = ["src/click/core.py"]
+entity_ids = ["src/click/core.py:Option.get_default", "src/click/core.py:Parameter.get_default#3", "src/click/core.py:Context.lookup_default#3"]
+expected_detection = true
+review_status = "source and documentation inspected by implementation author; independent human review pending"
+required_patterns = []
+forbidden_patterns = []
+preserve = ["## Flag Value"]
+split = "held_out"
+group = "click_boolean_defaults"
+id = "click_3239_authentic"
+variant = "authentic_head"
+expected_action = "unchanged"
+rationale = "HEAD documentation explicitly limits default=True substitution to non-boolean flags and describes literal True for boolean flags, matching the new is_bool_flag guard."
+
+[[cases]]
+repository_url = "https://github.com/pallets/click"
+pr_url = "https://github.com/pallets/click/pull/3239"
+base = "60cad4ad6583bf885c62d6f4597f3555d1ee1a0f"
+head = "a683017931b5bcb211e18685fa623e968727aa3b"
+license_path = "LICENSE.txt"
+document_path = "docs/options.md"
+section = "## Flag Value"
+prefix = ""
+source_paths = ["src/click/core.py"]
+entity_ids = ["src/click/core.py:Option.get_default", "src/click/core.py:Parameter.get_default#3", "src/click/core.py:Context.lookup_default#3"]
+expected_detection = true
+review_status = "source and documentation inspected by implementation author; independent human review pending"
+required_patterns = ["non.boolean", "boolean.*(?:literal|as.is|True)"]
+forbidden_patterns = []
+preserve = ["## Flag Value"]
+split = "held_out"
+group = "click_boolean_defaults"
+id = "click_3239_base_docs"
+variant = "base_docs"
+expected_action = "revise"
+rationale = "Unmodified base documentation describes default=True substitution for flags without excluding boolean flags. HEAD adds the exclusion. This pairs genuine historical documentation with new code; it is not an unfixed upstream bug."

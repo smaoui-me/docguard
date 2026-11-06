@@ -10,6 +10,7 @@ from docguard.ai.config import load_config
 from docguard.ai.dataset import evaluate_dataset
 from docguard.ai.evaluation import evaluate
 from docguard.ai.git_proposals import apply_git_proposal, suggest_git
+from docguard.ai.human_review import review_template, score_review
 from docguard.ai.proposals import apply_proposal, suggest
 from docguard.ai.provider import generate
 from docguard.ai.upstream import evaluate_pr
@@ -147,6 +148,9 @@ def main(argv: list[str] | None = None) -> int:
     git_ai.add_argument("--document", action="append", default=[])
     git_ai.add_argument("--max-documents", type=int, default=3)
     git_ai.add_argument("--dry-run", action="store_true")
+    git_ai.add_argument(
+        "--evidence-policy", choices=("mapped", "direct"), default="mapped"
+    )
     git_ai.add_argument("--provider", choices=("openai", "groq"))
     git_ai.add_argument("--model")
     git_ai.add_argument("--env-file", type=Path)
@@ -190,11 +194,40 @@ def main(argv: list[str] | None = None) -> int:
     upstream.add_argument("--output", type=Path, required=True)
     upstream.add_argument("--live", action="store_true")
     upstream.add_argument("--max-requests", type=int, default=3)
+    upstream.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the report at --output; keep completed cases",
+    )
+    upstream.add_argument("--max-retries", type=int, default=2)
+    upstream.add_argument("--max-retry-wait", type=float, default=30)
     upstream.add_argument("--provider", choices=("openai", "groq"))
     upstream.add_argument("--model")
     upstream.add_argument("--env-file", type=Path)
+    human = commands.add_parser(
+        "review-template",
+        help="Create an unfilled human review form for completed evaluations",
+    )
+    human.add_argument("report", type=Path)
+    human.add_argument("--output", type=Path, required=True)
+    scoring = commands.add_parser(
+        "score-review", help="Score explicit human judgments against their exact report"
+    )
+    scoring.add_argument("report", type=Path)
+    scoring.add_argument("--reviews", type=Path, required=True)
+    scoring.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "review-template":
+            review_template(args.report, args.output)
+            print(f"Unfilled human review form: {args.output}")
+            return 0
+        if args.command == "score-review":
+            human_result = score_review(args.report, args.reviews, args.output)
+            print(
+                f"Reviewed {human_result['reviewed_cases']}/{human_result['completed_cases']} completed cases. Report: {args.output}"
+            )
+            return 0
         if args.command == "evaluate-pr":
             config = load_config(args.env_file, args.provider, args.model)
             upstream_report = evaluate_pr(
@@ -205,6 +238,9 @@ def main(argv: list[str] | None = None) -> int:
                 selected=args.case,
                 live=args.live,
                 max_requests=args.max_requests,
+                resume=args.resume,
+                max_retries=args.max_retries,
+                max_retry_wait=args.max_retry_wait,
             )
             print(
                 f"{upstream_report['mode']}: {upstream_report['api_requests']} API requests, {upstream_report['errors']} errors, {upstream_report['not_run']} not run. Report: {args.output}"
@@ -245,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
                 dry_run=args.dry_run,
                 selected=args.document,
                 max_documents=args.max_documents,
+                evidence_policy=args.evidence_policy,
             )
             print(
                 f"Saved {count} {'request payloads (no API calls)' if args.dry_run else 'Git proposals'} to {args.output}"

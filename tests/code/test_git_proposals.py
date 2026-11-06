@@ -94,7 +94,7 @@ def test_dry_run_has_both_sources_diff_and_evidence_schema_ignores_dirty_worktre
     context = json.loads(payload["messages"][1]["content"])
     assert len(context["evidence"]) == 2
     assert "+def connect" in context["changes"][0]["diff"]
-    assert "previous_document_text" in context
+    assert "previous_document_text" in context or context["previous_document_same_as_current"]
     assert (
         "evidence_ids"
         in payload["response_format"]["json_schema"]["schema"]["required"]
@@ -281,3 +281,14 @@ def test_changed_mapping_rejected_at_apply(repo, tmp_path):
     (root / "docguard-map.json").write_text("{}")
     with pytest.raises(ProposalError, match="mapping"):
         apply_git_proposal(output, root, "README.md")
+
+
+def test_legacy_mapped_artifact_still_previews(repo, tmp_path):
+    output = tmp_path / "proposal.json"
+    suggest(repo, output)
+    data = json.loads(output.read_text())
+    data["schema_version"] = 1
+    del data["evidence_policy"]
+    del data["evidence_version"]
+    output.write_text(json.dumps(data))
+    assert "timeout" in apply_git_proposal(output, repo[0], "README.md", check=True)

@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 venv/
 *.json
+*.json.lock
 !/docguard-map.json
 # Test and tool caches
 .pytest_cache/

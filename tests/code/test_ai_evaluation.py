@@ -67,7 +67,7 @@ def test_offline_evaluates_complete_pipeline_without_network(tmp_path):
     assert report["mode"] == "offline-fixtures"
     assert report["passed"] == report["total"] == 4
     assert report["suite_version"] == 3
-    assert report["prompt_version"] == 2
+    assert report["prompt_version"] == 3
     assert json.loads((tmp_path / "report.json").read_text()) == report
     assert all(
         row["checks"]["generation_preserves_document"] for row in report["results"]

@@ -15,8 +15,11 @@ Git-based proposals now include before/after source and validated evidence refer
 See [Git proposals and the 30-case evaluation corpus](docs/git-proposals.md) for
 the demo, live/offline commands, limitations, and guidance on curating real PRs.
 
-A pinned HTTPX pilot now exercises actual PR code and documentation, with authentic
-and controlled variants reported separately. See [upstream PR evaluation](docs/upstream-evaluation.md).
+Pinned HTTPX and Click cases exercise actual PR code and documentation, with authentic
+and controlled variants reported separately. Upstream evaluations checkpoint results,
+resume completed work, and retry rate limits within an explicit request budget.
+Optional static dependency evidence and report-bound human review forms are described
+in [the evidence and review guide](docs/evidence-and-review.md). See [upstream PR evaluation](docs/upstream-evaluation.md).
 
 DocGuard extracts immutable entities for classes, functions, methods, and their
 async variants. Metadata includes qualified names, source lines, annotations,

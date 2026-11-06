@@ -3,7 +3,7 @@
 The first pilot uses HTTPX PRs [#3378](https://github.com/encode/httpx/pull/3378)
 and [#3364](https://github.com/encode/httpx/pull/3364). Their full base/head commit IDs
 are pinned in `evaluations/upstream/httpx.toml`. This is a development pilot with
-provisional labels pending independent review, not a held-out benchmark.
+provisional labels pending independent review. Click PR [#3239](https://github.com/pallets/click/pull/3239) adds two reserved cases in `evaluations/upstream/click.toml`. They have not been used for prompt tuning; this small dataset is not a validated benchmark.
 
 ## What is included
 
@@ -12,13 +12,25 @@ provisional labels pending independent review, not a held-out benchmark.
 | `httpx_3378_authentic` | Actual Request documentation section and code | `unchanged`: the string-method example still works; it never promised byte inputs |
 | `httpx_3378_stale_claim` | Actual code, with an explicitly authored obsolete byte-input claim added to docs | `revise`: remove the unsupported byte-input claim |
 | `httpx_3364_authentic` | Actual Request section and mapped Request/URL helpers | `unchanged`: existing prose does not promise query-string merging |
+| `click_3239_authentic` | Actual HEAD Flag Value documentation and default-resolution code | `unchanged`: docs already distinguish boolean and non-boolean defaults |
+| `click_3239_base_docs` | Actual base Flag Value documentation with HEAD code | `revise`: the historical general rule needs the boolean exception |
+| `httpx_1573_authentic_head` / `httpx_1573_base_docs` | Actual request-content docs and encoding implementation | `unchanged` / `revise`: document the new runtime deprecation warning |
+| `httpx_1808_authentic_head` / `httpx_1808_base_docs` | Actual redirect docs and API/client defaults | `unchanged` / `revise`: redirect following becomes opt-in |
 | `httpx_3364_dependency_ablation` | Actual Request code, an authored merging claim, with URL helpers deliberately withheld | `needs_review`: the new helper's effects cannot be established from supplied evidence |
 
-Two cases use authentic head documentation; two are **controlled variants**, not
-upstream documentation bugs. The manifest supports `base_docs` for a different
-repair task: head code with the actual base documentation. No such variant is
-needed for this initial pilot because these PRs did not provide a useful outdated
-claim in their original Request prose.
+There are ten cases across five PRs and two repositories. The HTTPX authored
+claim and dependency ablation are **controlled variants**, not upstream bugs.
+Click's `base_docs` case uses genuine historical prose without an authored prefix;
+the real PR updated that prose, so this is a reconstruction of the repair task,
+not a claim that the upstream bug remains unfixed.
+
+Every case has a `split` and related-change `group`. Both Click variants belong to
+the same reserved (`held_out`) group; HTTPX constructor cases are development.
+Manifest validation rejects a PR/group split across partitions, and a repository
+test checks grouping across all checked-in manifests. Do not tune prompts against
+the reserved results. Labels were inspected against code and docs during
+implementation; independent human review is still pending. See
+`evaluations/upstream/REVIEW.md` for the review protocol.
 
 The runner copies selected **complete source files** and the exact selected Markdown
 section into disposable Git repositories. This is a scoped projection, not the
@@ -71,8 +83,14 @@ This allows at most four requests. Start with one case if quota is limited:
 .\.venv\Scripts\python.exe -m docguard evaluate-pr --repository .docguard-upstream/httpx.git --case httpx_3378_authentic --live --output pr-one-case.json
 ```
 
-HTTP 401/403/429 stops further requests and records unrun cases. There are no retries.
-Use a new output filename on each run. Results include model output, citations,
+HTTP 401/403 stops immediately. HTTP 429 retries up to `--max-retries` (default 2),
+using numeric or HTTP-date `Retry-After`, or 1, 2, ... seconds of exponential
+backoff if it is absent/invalid. If the delay exceeds `--max-retry-wait` (default
+30 seconds), DocGuard stops rather than retrying earlier than requested. Other
+HTTP failures and uncertain network failures are not automatically retried.
+Every attempt consumes `--max-requests`; this is a **per-invocation** budget,
+including retries. Unused cases remain in the report when the budget runs out.
+Use a new output filename for an independent run. Results include model output, citations,
 validation checks, timing and token usage when returned by the provider. Monetary
 cost is null: no prices are guessed. Preview validation occurs in temporary trees;
 the upstream checkout/cache and your project documents are not modified.
@@ -80,6 +98,46 @@ the upstream checkout/cache and your project documents are not modified.
 Exit 0 means preparation succeeded or all completed live cases passed automatic
 checks; 1 means a live failure, operational error or unrun cases; 2 means invalid
 configuration or failed preparation. Exit 0 is not human approval of correctness.
+
+## Resume without repeating completed cases
+
+Reports use schema version 2. They are checkpointed atomically before each API
+attempt, after attempts, and after each case. This retains earlier results if a
+later case fails or you interrupt with Ctrl+C.
+
+```powershell
+.\.venv\Scripts\python.exe -m docguard evaluate-pr --repository .docguard-upstream/httpx.git --live --max-requests 2 --output pr-resumable.json
+# Later: same manifest, selection, provider, model, and prompts; another budget of 2.
+.\.venv\Scripts\python.exe -m docguard evaluate-pr --repository .docguard-upstream/httpx.git --live --max-requests 2 --output pr-resumable.json --resume
+```
+
+Completed cases are kept even if their quality checks failed. Validation failures
+are also retained. API failures and unfinished cases can be attempted again.
+Dataset bytes, selected case IDs, mode, provider, model, prompt versions and the
+request template hash must match. Credentials are not stored or fingerprinted, so
+you can rotate your key. Preparation reports cannot be resumed as live runs, and
+old schema-1 reports need a fresh run. Total API attempts and available token usage
+accumulate; `session_requests` describes the current invocation.
+
+A `.json.lock` file prevents concurrent writers. Ctrl+C normally releases it. A
+hard process termination can leave it behind: check that no evaluator is running
+before removing that lock. Never run two processes against the same report.
+A crash after the provider accepted a request but before its result was saved is
+ambiguous: resume may repeat that unfinished request. This is not an exactly-once
+billing guarantee. Reports are local artifacts, not signed attestations.
+
+## Prepare the Click cases
+
+```powershell
+git clone --bare --no-tags https://github.com/pallets/click.git .docguard-upstream/click.git
+git -C .docguard-upstream/click.git fetch origin refs/pull/3239/head
+.\.venv\Scripts\python.exe -m docguard evaluate-pr --repository .docguard-upstream/click.git --manifest evaluations/upstream/click.toml --output click-preparation.json
+```
+
+The fetch acquires the PR head even when it is absent from normal branch history.
+The manifest's full commit IDs remain authoritative. Reuse an existing clone;
+cloning again into it will fail. Add `--live --max-requests 3` and a new output path
+for a model evaluation. No upstream tests or dependencies are installed.
 
 ## Metrics and denominators
 
@@ -153,3 +211,29 @@ cover exact pins, scoped provenance, transformed docs, budget and output preflig
 no label/credential leakage, token usage, citation rejection, rate-limit stopping,
 and metric denominator calculations. They do not clone public repositories or make
 paid calls in CI.
+
+
+## Evidence policies and human scoring
+
+See [the evidence and human review guide](evidence-and-review.md) for the offline
+comparison demo and the `review-template` / `score-review` commands. New optional
+manifest fields are `evidence_policy = "direct"` (default `mapped`) and
+`base_section` when an upstream PR renames a documentation heading. The selection
+policy and source scope are part of the dataset configuration; do not change them
+mid-run. Resume identity now also includes the evidence selector version. Reports
+from before this change require a fresh run.
+
+To acquire every HTTPX PR used by this expanded manifest, use a full bare cache
+(reuse the existing directory if already created):
+
+```powershell
+git clone --bare --no-tags https://github.com/encode/httpx.git .docguard-upstream/httpx-full.git
+git -C .docguard-upstream/httpx-full.git fetch origin refs/pull/3378/head refs/pull/3364/head refs/pull/1573/head refs/pull/1808/head
+.\.venv\Scripts\python.exe -m docguard evaluate-pr --repository .docguard-upstream/httpx-full.git --output expanded-preparation.json
+```
+
+The latest expansion adds genuine historical documentation from PRs
+[#1573](https://github.com/encode/httpx/pull/1573) and
+[#1808](https://github.com/encode/httpx/pull/1808). Historical docs are deliberately
+paired with new code for the repair cases. The original PR authors already updated
+those docs; these cases do not assert that current HTTPX documentation is broken.

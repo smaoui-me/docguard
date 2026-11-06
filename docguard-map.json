@@ -12,6 +12,9 @@
     ],
     "docs/upstream-evaluation.md": [
       "src/docguard/ai/upstream.py:evaluate_pr",
+      "src/docguard/ai/upstream.py:_evaluate_pr",
+      "src/docguard/ai/upstream.py:_checkpoint",
+      "src/docguard/ai/upstream.py:load_manifest",
       "src/docguard/ai/upstream.py:materialize_case",
       "src/docguard/ai/upstream.py:summarize"
     ],
@@ -32,6 +35,12 @@
       "src/docguard/ai/proposals.py:suggest",
       "src/docguard/ai/proposals.py:apply_proposal",
       "src/docguard/ai/provider.py:generate"
+    ],
+    "docs/evidence-and-review.md": [
+      "src/docguard/ai/evidence.py:DependencyEvidence.expand",
+      "src/docguard/ai/human_review.py:review_template",
+      "src/docguard/ai/human_review.py:score_review",
+      "src/docguard/ai/git_proposals.py:prepare_git_documents"
     ]
   }
 }
