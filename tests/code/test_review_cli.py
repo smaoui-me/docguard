@@ -104,7 +104,7 @@ class TestReviewCli(unittest.TestCase):
     def test_mapping_errors_no_partial_report(self):
         for content in (
             "{",
-            '{"schema_version":2,"documents":{}}',
+            '{"schema_version":3,"documents":{}}',
             '{"schema_version":1,"documents":{"docs/client.md":["client.py:typo"]}}',
         ):
             with self.subTest(content=content):

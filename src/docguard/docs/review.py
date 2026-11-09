@@ -43,10 +43,14 @@ def removed_mapping_links(
 ) -> tuple[RemovedLink, ...]:
     """Compare explicit edges, independent of source changes or document contents."""
     old = {
-        (item.document, entity_id) for item in before for entity_id in item.entity_ids
+        (item.document, entity_id)
+        for item in before
+        for entity_id in set(item.entity_ids) | set(item.dependency_ids)
     }
     new = {
-        (item.document, entity_id) for item in after for entity_id in item.entity_ids
+        (item.document, entity_id)
+        for item in after
+        for entity_id in set(item.entity_ids) | set(item.dependency_ids)
     }
     return tuple(
         RemovedLink(document, entity_id) for document, entity_id in sorted(old - new)
@@ -77,6 +81,7 @@ def review_documents(
                     f"Unknown entity ID {entity_id!r} referenced by {mapping.document}"
                 )
             linked.add(entity_id)
+        linked.update(set(mapping.dependency_ids) & known)
     reasons = {
         change.after.id: ReviewReason(
             change.after.id, "modified", change.changed_fields
@@ -88,8 +93,16 @@ def review_documents(
     )
     documents: list[DocumentReview] = []
     for mapping in sorted(mappings, key=lambda item: item.document):
+        dependencies = set(mapping.dependency_ids)
+        relevant = set(mapping.entity_ids) | dependencies
+        required_additions = {
+            entity.id: ReviewReason(entity.id, "added")
+            for entity in changes.added
+            if entity.id in dependencies
+        }
+        relevant_reasons = {**reasons, **required_additions}
         affected = tuple(
-            reasons[key] for key in sorted(set(mapping.entity_ids)) if key in reasons
+            relevant_reasons[key] for key in sorted(relevant) if key in relevant_reasons
         )
         if affected:
             documents.append(DocumentReview(mapping.document, affected))

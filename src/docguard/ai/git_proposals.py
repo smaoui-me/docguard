@@ -7,6 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from docguard.ai.claims import assess_claims, blocked_decision
 from docguard.ai.config import AIConfig
 from docguard.ai.evidence import EVIDENCE_VERSION, DependencyEvidence
 from docguard.ai.files import (
@@ -37,6 +38,11 @@ from docguard.code.snapshots import save_snapshot
 from docguard.docs.mapping import load_mapping
 from docguard.docs.reporting import report_document
 from docguard.docs.review import removed_mapping_links, review_documents
+from docguard.docs.sections import (
+    replace_section,
+    select_section,
+    validate_section_edit,
+)
 from docguard.git_review import GitTrees, _git, git_trees
 
 
@@ -99,6 +105,8 @@ def prepare_git_documents(
             trees.new, baseline, trees.new / mapping_path, selected, max_documents
         )
     links = {item.document: item.entity_ids for item in mappings}
+    requirements = {item.document: item.claims for item in mappings}
+    scopes = {item.document: item.section for item in mappings}
     collectors = (
         {
             "before": DependencyEvidence(trees.old, before),
@@ -119,10 +127,36 @@ def prepare_git_documents(
                     evidence.append(_evidence(root, revision, index[entity_id], side))
         context = dict(document.context)
         context["evidence"] = evidence
+        # Explicit requirements bypass heuristic retrieval, not the context budget.
+        for ref in sorted(
+            {
+                ref
+                for claim in requirements[document.document]
+                for ref in claim.required_evidence
+            }
+        ):
+            if any(entry["id"] == ref for entry in evidence):
+                continue
+            side, entity_id = ref.split(":", 1)
+            index, root, revision = (
+                (before, trees.old, trees.merge_base)
+                if side == "before"
+                else (after, trees.new, trees.head)
+            )
+            if entity_id in index:
+                evidence.append(_evidence(root, revision, index[entity_id], side))
         old_doc = trees.old / relative_path(document.document)
         context["previous_document_text"] = (
             read_bytes(old_doc).decode("utf-8") if old_doc.is_file() else None
         )
+        if scopes[document.document] and old_doc.is_file():
+            try:
+                old_raw = read_bytes(old_doc)
+                context["previous_document_text"] = select_section(
+                    old_raw, scopes[document.document]
+                ).text(old_raw)
+            except ProposalError:
+                context["previous_document_text"] = None
         context["git"] = {
             "base": trees.base,
             "head": trees.head,
@@ -183,9 +217,16 @@ def prepare_git_documents(
                     revision,
                     max_chars=min(8000, available),
                 )
-                evidence.extend(additions)
+                known_ids = {entry["id"] for entry in evidence}
+                evidence.extend(
+                    entry for entry in additions if entry["id"] not in known_ids
+                )
                 issues.extend(missing)
             context["evidence_gaps"] = issues
+        if requirements[document.document]:
+            context["claim_requirements"] = assess_claims(
+                requirements[document.document], str(context["document_text"]), evidence
+            )
         if len(json.dumps(context, ensure_ascii=False)) > MAX_CONTEXT_CHARS:
             raise ProposalError(
                 "Git evidence exceeds context limit; narrow the document mapping"
@@ -240,6 +281,13 @@ def suggest_git(
             "merge_base": trees.merge_base,
             "mapping": mapping,
         }
+        routes = {
+            item.document: item.context["claim_requirements"]
+            for item in prepared
+            if "claim_requirements" in item.context
+        }
+        if routes:
+            review["claim_requirements"] = routes
         if dry_run:
             write_new_json(
                 output,
@@ -254,13 +302,14 @@ def suggest_git(
                     "requests": [
                         request_payload(config.model, item.context, config.provider)
                         for item in prepared
+                        if blocked_decision(item.context) is None
                     ],
                 },
             )
             return len(prepared)
         proposals: list[dict[str, object]] = []
         for item in prepared:
-            response = (
+            response = blocked_decision(item.context) or (
                 generator(config.model, item.context)
                 if generator
                 else generate(
@@ -276,7 +325,14 @@ def suggest_git(
             decision = {
                 key: data[key] for key in ("action", "summary", "content", "warnings")
             }
-            action, summary, content, warnings = _decision(decision, item.original)
+            action, summary, content, warnings = _decision(
+                decision, str(item.context["document_text"])
+            )
+            if content is not None and "section" in item.context:
+                scope = tuple(string(v) for v in array(item.context["section"]))
+                content = replace_section(
+                    item.original.encode("utf-8"), scope, content
+                ).decode("utf-8")
             citations = validate_citations(
                 data["evidence_ids"], item.context["evidence"], action
             )
@@ -393,6 +449,13 @@ def apply_git_proposal(
             proposal = row["proposal"]
             assert isinstance(proposal, dict)
             if (
+                blocked_decision(originals[name].context) is not None
+                and proposal.get("action") != "needs_review"
+            ):
+                raise ProposalError(
+                    "Claim evidence requirements are unmet; regenerate for human review"
+                )
+            if (
                 proposal.get("original") != originals[name].original
                 or proposal.get("original_sha256") != originals[name].original_sha256
             ):
@@ -403,10 +466,21 @@ def apply_git_proposal(
                 row["evidence_ids"], row["evidence"], string(proposal.get("action"))
             )
             proposal = dict(proposal)
+            scope = tuple(
+                string(v) for v in array(originals[name].context.get("section", []))
+            )
+            if scope and proposal.get("action") == "revise":
+                validate_section_edit(
+                    originals[name].original, string(proposal.get("content")), scope
+                )
             if name == document:
                 from docguard.ai.files import document_path
 
                 actual = read_bytes(document_path(root, name))
+                if scope and actual != originals[name].original.encode("utf-8"):
+                    raise ProposalError(
+                        "Document changed since proposal HEAD (section edits require exact bytes)"
+                    )
                 if actual.replace(b"\r\n", b"\n") != originals[name].original.encode(
                     "utf-8"
                 ).replace(b"\r\n", b"\n"):
@@ -427,4 +501,9 @@ def apply_git_proposal(
                 "proposals": proposals,
             },
         )
-        return apply_proposal(bundle, root, document, check)
+        scoped = (
+            "section" in originals[document].context if document in originals else False
+        )
+        return apply_proposal(
+            bundle, root, document, check, normalize_newlines=not scoped
+        )

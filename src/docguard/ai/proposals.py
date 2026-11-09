@@ -28,6 +28,7 @@ from docguard.code.scanner import discover_python_files
 from docguard.code.snapshots import load_snapshot
 from docguard.docs.mapping import load_mapping
 from docguard.docs.review import review_documents
+from docguard.docs.sections import select_section
 
 MAX_CONTEXT_CHARS = 40000
 
@@ -85,6 +86,7 @@ def prepare_documents(
             f"{len(names)} documents exceed max-documents={max_documents}; select --document or raise the limit"
         )
     links = {item.document: item.entity_ids for item in mappings}
+    scopes = {item.document: item.section for item in mappings}
     prepared: list[PreparedDocument] = []
     for name in names:
         raw = read_bytes(document_path(root, name))
@@ -126,6 +128,9 @@ def prepare_documents(
             "entities": entities,
             "limitations": "Old function bodies and external dependencies are unavailable. Assess documentation against current evidence; missing history alone does not require review. If missing dependencies prevent verifying a behavioral claim, request review instead of inferring their effects.",
         }
+        if scopes[name]:
+            context["document_text"] = select_section(raw, scopes[name]).text(raw)
+            context["section"] = list(scopes[name])
         if len(json.dumps(context, ensure_ascii=False)) > MAX_CONTEXT_CHARS:
             raise ProposalError(
                 f"Context for {name} exceeds {MAX_CONTEXT_CHARS} characters; split the document/mapping"
@@ -137,7 +142,7 @@ def prepare_documents(
 
 
 def _decision(
-    value: object, original: str
+    value: object, original: str, *, normalize_newlines: bool = True
 ) -> tuple[str, str, str | None, tuple[str, ...]]:
     data = object_fields(value, {"action", "summary", "content", "warnings"})
     action, summary = string(data["action"]), string(data["summary"])
@@ -148,12 +153,15 @@ def _decision(
     if action == "revise":
         if content is None or not content.strip():
             raise ProposalError("A revision must contain a non-empty complete document")
-        if len(content) > 60000:
+        if normalize_newlines and len(content) > 60000:
             raise ProposalError("Proposed document exceeds 60000 characters")
+        if not normalize_newlines and len(content.encode("utf-8")) > 1_000_000:
+            raise ProposalError("Proposed document exceeds 1 MB")
         # Preserve the original newline convention for ordinary UTF-8 documents.
-        content = content.replace("\r\n", "\n")
-        if "\r\n" in original and "\n" not in original.replace("\r\n", ""):
-            content = content.replace("\n", "\r\n")
+        if normalize_newlines:
+            content = content.replace("\r\n", "\n")
+            if "\r\n" in original and "\n" not in original.replace("\r\n", ""):
+                content = content.replace("\n", "\r\n")
         if content == original:
             action, content = "unchanged", None
     elif content is not None:
@@ -181,6 +189,12 @@ def suggest(
     if not model.strip():
         raise ProposalError("Model name cannot be empty")
     root = root.resolve(strict=True)
+    if any(item.claims for item in load_mapping(mapping, root)):
+        raise ProposalError(
+            "Claim evidence requirements need pinned Git evidence; use suggest-git"
+        )
+    if any(item.section for item in load_mapping(mapping, root)):
+        raise ProposalError("Section edits need pinned Git evidence; use suggest-git")
     source_hash, prepared = prepare_documents(
         root, baseline, mapping, selected, max_documents
     )
@@ -248,7 +262,9 @@ def _sha(value: object) -> str:
     return text
 
 
-def load_proposals(path: Path) -> tuple[str, tuple[Proposal, ...]]:
+def load_proposals(
+    path: Path, *, normalize_newlines: bool = True
+) -> tuple[str, tuple[Proposal, ...]]:
     data = object_fields(
         parse_json(read_bytes(path, 10_000_000).decode("utf-8")),
         {
@@ -295,16 +311,25 @@ def load_proposals(path: Path) -> tuple[str, tuple[Proposal, ...]]:
         decision = {
             key: item[key] for key in ("action", "summary", "content", "warnings")
         }
-        action, summary, content, warnings = _decision(decision, original)
+        action, summary, content, warnings = _decision(
+            decision, original, normalize_newlines=normalize_newlines
+        )
         proposals.append(
             Proposal(name, original, original_hash, action, summary, content, warnings)
         )
     return source_hash, tuple(proposals)
 
 
-def apply_proposal(path: Path, root: Path, document: str, check: bool = False) -> str:
+def apply_proposal(
+    path: Path,
+    root: Path,
+    document: str,
+    check: bool = False,
+    *,
+    normalize_newlines: bool = True,
+) -> str:
     """Preview or apply exactly one selected edit, refusing stale source/documents."""
-    source_hash, proposals = load_proposals(path)
+    source_hash, proposals = load_proposals(path, normalize_newlines=normalize_newlines)
     selected = next((item for item in proposals if item.document == document), None)
     if selected is None:
         raise ProposalError(f"No proposal for {document}")

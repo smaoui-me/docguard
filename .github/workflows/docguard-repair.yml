@@ -1,0 +1,140 @@
+name: DocGuard controlled repair
+on:
+  workflow_dispatch:
+    inputs:
+      source_pr:
+        description: Same-repository source PR number
+        required: true
+      document:
+        description: Mapped document path
+        required: true
+        default: README.md
+      live:
+        description: Make one AI request (sends source/document evidence)
+        type: boolean
+        default: false
+      publish:
+        description: Request draft publication after environment approval
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: docguard-repair-${{ inputs.source_pr }}
+  cancel-in-progress: false
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      head: ${{ steps.source.outputs.head }}
+      digest: ${{ steps.digest.outputs.digest }}
+      applicable: ${{ steps.decision.outputs.applicable }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-tool
+          persist-credentials: false
+      - id: source
+        name: Resolve an open same-repository PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.source_pr }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/source-pr.json"
+          python - <<'PY'
+          import json, os, pathlib, re
+          pr = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'source-pr.json').read_text())
+          assert pr['state'] == 'open'
+          assert pr['head']['repo']['full_name'] == os.environ['GITHUB_REPOSITORY'], 'Forks are unsupported'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              for side in ('head', 'base'):
+                  sha = pr[side]['sha']
+                  assert re.fullmatch('[0-9a-f]{40}', sha)
+                  stream.write(f'{side}={sha}\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.head }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./trusted-tool
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        with:
+          root: ${{ github.workspace }}/target
+          base: ${{ steps.source.outputs.base }}
+          head: ${{ steps.source.outputs.head }}
+          document: ${{ inputs.document }}
+          output: ${{ runner.temp }}/docguard-proposal.json
+          live: ${{ inputs.live }}
+      - id: decision
+        name: Route non-revisions to artifact review
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          data = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'docguard-proposal.json').read_text())
+          rows = data.get('proposals', [])
+          applicable = len(rows) == 1 and rows[0]['proposal']['action'] == 'revise'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'applicable={str(applicable).lower()}\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
+              stream.write('DocGuard: proposed revision ready for artifact review.\n' if applicable else 'DocGuard: no applicable revision. Inspect the request/proposal artifact for the decision or evidence requirements.\n')
+          PY
+      - id: digest
+        run: echo "digest=$(sha256sum "$RUNNER_TEMP/docguard-proposal.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docguard-proposal
+          path: ${{ runner.temp }}/docguard-proposal.json
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    if: ${{ inputs.live && inputs.publish && needs.analyze.outputs.applicable == 'true' }}
+    needs: analyze
+    environment: docguard-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-tool
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.analyze.outputs.head }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: docguard-proposal
+          path: ${{ runner.temp }}/proposal
+      - name: Revalidate and publish one draft
+        working-directory: ${{ runner.temp }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/trusted-tool/src
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_DIGEST: ${{ needs.analyze.outputs.digest }}
+          DOCUMENT: ${{ inputs.document }}
+          PR_NUMBER: ${{ inputs.source_pr }}
+          TARGET_ROOT: ${{ github.workspace }}/target
+        run: |
+          set -euo pipefail
+          artifact="$RUNNER_TEMP/proposal/docguard-proposal.json"
+          [[ "$(sha256sum "$artifact" | cut -d ' ' -f 1)" == "$EXPECTED_DIGEST" ]]
+          python -P -m docguard publish-proposal "$artifact" --root "$TARGET_ROOT" \
+            --repository "$GITHUB_REPOSITORY" --source-pr "$PR_NUMBER" \
+            --document "$DOCUMENT" --publish

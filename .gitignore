@@ -8,6 +8,7 @@ venv/
 *.json
 *.json.lock
 !/docguard-map.json
+!/evaluations/candidates/*.json
 # Test and tool caches
 .pytest_cache/
 .mypy_cache/

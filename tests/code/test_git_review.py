@@ -190,7 +190,7 @@ class TestGitReview(unittest.TestCase):
         self.assertNotIn("Traceback", result.stderr)
 
     def test_invalid_mapping_and_missing_committed_mapping(self):
-        self.mapping.write_text('{"schema_version":2,"documents":{}}', encoding="utf-8")
+        self.mapping.write_text('{"schema_version":3,"documents":{}}', encoding="utf-8")
         self.commit("invalid mapping")
         self.assertEqual(self.cli("--advisory").returncode, 2)
         self.mapping.unlink()

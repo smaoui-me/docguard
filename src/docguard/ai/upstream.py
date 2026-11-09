@@ -11,6 +11,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from time import monotonic, sleep
 from typing import Any
 
+from docguard.ai.claims import CLAIM_GATE_VERSION
 from docguard.ai.config import AIConfig
 from docguard.ai.evidence import EVIDENCE_VERSION
 from docguard.ai.files import (
@@ -29,6 +30,7 @@ from docguard.ai.provider import (
     generate,
     request_payload,
 )
+from docguard.docs.mapping import parse_claims
 
 
 def local_git(root: Path, *args: str) -> bytes:
@@ -85,6 +87,8 @@ def load_manifest(path: Path) -> list[dict[str, Any]]:
         if not re.fullmatch(r"[a-z0-9_]+", case["id"]) or case["id"] in seen:
             raise ProposalError("Invalid or duplicate case ID")
         seen.add(case["id"])
+        if "claims" in case:
+            parse_claims(case["claims"])
         if case.get("evidence_policy", "mapped") not in ("mapped", "direct"):
             raise ProposalError("Unknown evidence policy")
         split = case.get("split", "development")
@@ -226,8 +230,15 @@ def materialize_case(
     (root / "docguard-map.json").write_text(
         json.dumps(
             {
-                "schema_version": 1,
-                "documents": {case["document_path"]: case["entity_ids"]},
+                "schema_version": 2 if "claims" in case else 1,
+                "documents": {
+                    case["document_path"]: {
+                        "entity_ids": case["entity_ids"],
+                        "claims": case["claims"],
+                    }
+                    if "claims" in case
+                    else case["entity_ids"]
+                },
             }
         ),
         encoding="utf-8",
@@ -428,8 +439,6 @@ def _evaluate_pr(
     cases = [c for c in cases if not selected or c["id"] in selected]
     if not cases or not 1 <= max_requests <= 100:
         raise ProposalError("Select cases and a request budget between 1 and 100")
-    if live and not config.api_key.strip() and generator is None:
-        raise ProposalError("Live mode requires credentials")
     identity = {
         "manifest_sha256": digest(read_bytes(manifest)),
         "cases": [case["id"] for case in cases],
@@ -451,6 +460,7 @@ def _evaluate_pr(
         "suite": "upstream-pr-pilot-v2",
         "evidence_version": EVIDENCE_VERSION,
         "preservation_version": PRESERVATION_VERSION,
+        "claim_gate_version": CLAIM_GATE_VERSION,
     }
     results: list[dict[str, Any]] = []
     attempts: list[dict[str, Any]] = []
@@ -583,13 +593,23 @@ def _evaluate_pr(
             )
             requests = json.loads(requests_path.read_text(encoding="utf-8"))
             prepared.append((case, root, provenance, commits, requests))
+        if (
+            live
+            and not config.api_key.strip()
+            and generator is None
+            and any(item[4]["requests"] for item in prepared)
+        ):
+            raise ProposalError("Live mode requires credentials")
         if not results:
             results.extend(
                 {
                     "case": case["id"],
                     "status": "not_run",
                     "provenance": provenance,
-                    "detected": bool(requests["requests"]),
+                    "detected": bool(
+                        requests["requests"]
+                        or requests["review"].get("claim_requirements")
+                    ),
                     "expected_action": case["expected_action"],
                     "expected_detection": case["expected_detection"],
                 }
@@ -610,7 +630,10 @@ def _evaluate_pr(
                 "expected_detection": case["expected_detection"],
                 "review_status": case["review_status"],
                 "provenance": provenance,
-                "detected": bool(requests["requests"]),
+                "detected": bool(
+                    requests["requests"] or requests["review"].get("claim_requirements")
+                ),
+                "claim_requirements": requests["review"].get("claim_requirements", {}),
                 "status": "prepared",
                 "human_review": {
                     "status": "pending",
@@ -727,6 +750,17 @@ def _evaluate_pr(
                     if proposals
                     else {"action": "unchanged", "content": None}
                 )
+                row["decision_source"] = (
+                    "model"
+                    if any(a["case"] == case["id"] for a in attempts)
+                    else "deterministic_gate"
+                    if proposals
+                    else "no_change"
+                )
+                if row["decision_source"] == "deterministic_gate":
+                    row["citations_valid"] = (
+                        True  # Empty citations are valid for needs_review.
+                    )
                 checks = {
                     "expected_action": decision["action"] == case["expected_action"],
                     "expected_detection": row["detected"] == case["expected_detection"],

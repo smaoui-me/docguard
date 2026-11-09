@@ -1,0 +1,30 @@
+# Separate operator-annotated experiment; not part of the original baseline.
+schema_version = 1
+
+[[cases]]
+split = "development"
+group = "httpx_request_constructor"
+id = "httpx_3364_explicit_requirements"
+repository_url = "https://github.com/encode/httpx"
+pr_url = "https://github.com/encode/httpx/pull/3364"
+base = "6f9b50990dad9645a6f9dc0e1eb90af0a6474c3b"
+head = "bf5758388619afdc957722ca8a9a4ff255df6866"
+license_path = "LICENSE.md"
+document_path = "docs/api.md"
+section = "## `Request`"
+variant = "dependency_ablation"
+prefix = "Supplying params to Request merges them with any query parameters already in the URL.\n\n"
+source_paths = ["httpx/_models.py"]
+entity_ids = ["httpx/_models.py:Request.__init__"]
+expected_action = "needs_review"
+expected_detection = true
+review_status = "provisional author review; independent human review pending"
+rationale = "Explicit-contract variant of the ablation: the mapped claim requires the current URL constructor, which the projection intentionally omits. Tests deterministic review routing, not improved model reasoning."
+required_patterns = []
+forbidden_patterns = []
+preserve = ["## `Request`", "https://example.org"]
+
+[[cases.claims]]
+id = "query-parameter-merging"
+quote = "Supplying params to Request merges them with any query parameters already in the URL."
+required_evidence = ["after:httpx/_models.py:Request.__init__", "after:httpx/_urls.py:URL.__init__"]

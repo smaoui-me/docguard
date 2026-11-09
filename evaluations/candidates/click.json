@@ -1,0 +1,419 @@
+{
+  "candidates": [
+    {
+      "admitted": false,
+      "base": "06b2a678741131fd577ce170e23e5ca0aeba0309",
+      "document_paths": [
+        "docs/parameters.md",
+        "docs/upgrade-guides.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3877",
+      "head": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+      "id": "pallets_click_3877",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3877",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/core.py"
+      ],
+      "split": "unassigned",
+      "title": "Add `Parameter.spec` and deprecate `human_readable_name` (#3877)"
+    },
+    {
+      "admitted": false,
+      "base": "3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+      "document_paths": [
+        "docs/upgrade-guides.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3866",
+      "head": "06b2a678741131fd577ce170e23e5ca0aeba0309",
+      "id": "pallets_click_3866",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3866",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/core.py"
+      ],
+      "split": "unassigned",
+      "title": "Deprecate parameter names that are: not a Python identifier, or a Python Keyword, or not lower-cased (#3866)"
+    },
+    {
+      "admitted": false,
+      "base": "6aabf099bfdd4c1e75fe8d0e0d4241372b988ab1",
+      "document_paths": [
+        "docs/arguments.md",
+        "docs/documentation.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3876",
+      "head": "3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+      "id": "pallets_click_3876",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3876",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/core.py",
+        "src/click/types.py",
+        "src/click/utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Merge stable into main (#3876)"
+    },
+    {
+      "admitted": false,
+      "base": "36baa15ff831b939a22bc527cd76ce653ef6f66d",
+      "document_paths": [
+        "docs/arguments.md",
+        "docs/complex.md",
+        "docs/contrib.md",
+        "docs/exceptions.md",
+        "docs/faqs.md",
+        "docs/parameter-types.md",
+        "docs/shell-completion.md",
+        "docs/utils.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3851",
+      "head": "6aabf099bfdd4c1e75fe8d0e0d4241372b988ab1",
+      "id": "pallets_click_3851",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3851",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/_utils.py",
+        "src/click/_winconsole.py",
+        "src/click/core.py",
+        "src/click/termui.py"
+      ],
+      "split": "unassigned",
+      "title": "Stable (#3851)"
+    },
+    {
+      "admitted": false,
+      "base": "5aa8ac43527f91c4c801a50b485c09576715d340",
+      "document_paths": [
+        "docs/arguments.md",
+        "docs/documentation.md",
+        "docs/option-decorators.md",
+        "docs/shell-completion.md",
+        "docs/utils.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3697",
+      "head": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+      "id": "pallets_click_3697",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3697",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/_compat.py",
+        "src/click/core.py",
+        "src/click/shell_completion.py",
+        "src/click/termui.py",
+        "src/click/utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Pre-8.5.0 release changelog and doc fixes (#3697)"
+    },
+    {
+      "admitted": false,
+      "base": "333c28d79cd982990ee98eef61ec20ab1a4f38ba",
+      "document_paths": [
+        "docs/testing.md",
+        "docs/upgrade-guides.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3704",
+      "head": "cfa01eeb7894a408af70b29d28c0b24f8680f9fb",
+      "id": "pallets_click_3704",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3704",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/testing.py"
+      ],
+      "split": "unassigned",
+      "title": "Deprecate `isolated_filesystem` and document its limits (#3704)"
+    },
+    {
+      "admitted": false,
+      "base": "7df2f82305f20f1611a9668b38d26933b648d807",
+      "document_paths": [
+        "docs/handling-files.md",
+        "docs/utils.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3695",
+      "head": "333c28d79cd982990ee98eef61ec20ab1a4f38ba",
+      "id": "pallets_click_3695",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3695",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/__init__.py",
+        "src/click/_termui_impl.py",
+        "src/click/core.py",
+        "src/click/termui.py",
+        "src/click/types.py",
+        "src/click/utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Mark clearly functions private status. Deprecated Python 2 utilities. (#3695)"
+    },
+    {
+      "admitted": false,
+      "base": "b551fe85714c906565303fae98136d7c72b252ea",
+      "document_paths": [
+        "docs/shell-completion.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3637",
+      "head": "7df2f82305f20f1611a9668b38d26933b648d807",
+      "id": "pallets_click_3637",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3637",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/shell_completion.py"
+      ],
+      "split": "unassigned",
+      "title": "Add built-in PowerShell shell completion support (#3637)"
+    },
+    {
+      "admitted": false,
+      "base": "8c1a0a7abbc1c36f70d1f65f3604acc46c5ce6ab",
+      "document_paths": [
+        "docs/documentation.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3678",
+      "head": "b67832c2167e5b0ff6764a8c04a0a9087e697b5a",
+      "id": "pallets_click_3678",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3678",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/core.py"
+      ],
+      "split": "unassigned",
+      "title": "Fix parsing when a parameter is named `help` (#3678)"
+    },
+    {
+      "admitted": false,
+      "base": "94c191ca6c9598865fc5672b85cf138845b337d5",
+      "document_paths": [
+        "docs/utils.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3671",
+      "head": "a44e9f05edbfcea04b5ec91d4403976a50381c59",
+      "id": "pallets_click_3671",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3671",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/termui.py",
+        "src/click/utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Update documentation following Colorama removal (#3671)"
+    },
+    {
+      "admitted": false,
+      "base": "16fc00e2f4a2717a521084f193709a6058afc693",
+      "document_paths": [
+        "docs/api.md",
+        "docs/utils.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3581",
+      "head": "94c191ca6c9598865fc5672b85cf138845b337d5",
+      "id": "pallets_click_3581",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3581",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/__init__.py",
+        "src/click/decorators.py"
+      ],
+      "split": "unassigned",
+      "title": "Add `@custom_version_option`, freeze `@version_option` (#3581)"
+    },
+    {
+      "admitted": false,
+      "base": "4fc0e90e1c19faf82bc18f8551eb1ed78dc738ac",
+      "document_paths": [
+        "docs/index.md",
+        "docs/parameters.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3563",
+      "head": "8a1b1a33d739be05b7e91251e3c0dde77c5e152f",
+      "id": "pallets_click_3563",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3563",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "docs/conf.py",
+        "src/click/_compat.py",
+        "src/click/_termui_impl.py",
+        "src/click/core.py",
+        "src/click/termui.py",
+        "src/click/testing.py",
+        "src/click/types.py",
+        "src/click/utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Merge `stable` into `main` after `CHANGES` rST to Markdown conversion (#3563)"
+    },
+    {
+      "admitted": false,
+      "base": "1a994adbb114d402275a614942e2f838a654e648",
+      "document_paths": [
+        "docs/arguments.md",
+        "docs/documentation.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3473",
+      "head": "c48021040a50c659b74e24ac2b11c9c9c6620a21",
+      "id": "pallets_click_3473",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3473",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/core.py"
+      ],
+      "split": "unassigned",
+      "title": "Add help parameter to arguments (#3473)"
+    },
+    {
+      "admitted": false,
+      "base": "6a141c3681027e8124ce5a3c70e608dbbebffafb",
+      "document_paths": [
+        "docs/advanced.md",
+        "docs/documentation.md",
+        "docs/options.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3521",
+      "head": "1a994adbb114d402275a614942e2f838a654e648",
+      "id": "pallets_click_3521",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3521",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/core.py",
+        "src/click/exceptions.py",
+        "src/click/formatting.py",
+        "src/click/shell_completion.py",
+        "src/click/testing.py"
+      ],
+      "split": "unassigned",
+      "title": "Merge stable into main (#3521)"
+    },
+    {
+      "admitted": false,
+      "base": "3a40e43e8f61761cb7bd4f3e27ae3060690a84eb",
+      "document_paths": [
+        "docs/quickstart.md",
+        "docs/utils.md"
+      ],
+      "expected_action": null,
+      "group": "pallets/click#3505",
+      "head": "6a141c3681027e8124ce5a3c70e608dbbebffafb",
+      "id": "pallets_click_3505",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/pallets/click/pull/3505",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/pallets/click",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "src/click/_compat.py",
+        "src/click/termui.py",
+        "src/click/utils.py"
+      ],
+      "split": "unassigned",
+      "title": "remove colorama (#3505)"
+    }
+  ],
+  "independently_reviewed": 0,
+  "kind": "docguard.benchmark.candidates",
+  "repository_head": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+  "schema_version": 1,
+  "selection": "first-parent commits touching implementation and documentation; biased toward paired updates"
+}

@@ -4,6 +4,16 @@ A self-healing technical documentation tool.
 
 Requires Python 3.11 or newer.
 
+## Targeted repair milestone
+
+DocGuard now supports bounded Markdown section proposals, byte-preserving application,
+and preview-first GitHub draft publication. See [the walkthrough](docs/targeted-repair.md)
+for exact commands and [the release checklist](docs/release-acceptance.md) for remaining
+hosted and independent-review acceptance work. The [benchmark intake guide](docs/benchmark-intake.md)
+distinguishes thirty pending PR candidates from the five-PR evaluated pilot.
+Measured checks, the live smoke result, and remaining gates are recorded in
+[the November 9 evaluation](docs/milestone-evaluation-20261109.md).
+
 ## Current milestone: AI-assisted documentation proposals
 
 DocGuard can now generate documentation proposals, show a diff, and explicitly
@@ -491,3 +501,8 @@ Groq and OpenAI configuration plus live model evaluations are documented in
 [the Groq evaluation guide](docs/groq-evaluation.md). Run
 `python -m docguard evaluate-ai --output evaluation-offline.json` for offline
 fixtures; add `--live` to evaluate the configured model using synthetic cases.
+
+Opt-in [claim evidence requirements](docs/claim-requirements.md) route affected
+documents to review before an AI call when declared source evidence is missing.
+See the [project roadmap](docs/project-roadmap.md) for the current phase and remaining
+release milestones. Try `python examples/claim_requirements_demo.py` without an API key.

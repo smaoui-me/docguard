@@ -6,11 +6,13 @@ import sys
 from functools import partial
 from pathlib import Path
 
+from docguard.ai.benchmark import audit_benchmark, collect_candidates
 from docguard.ai.config import load_config
 from docguard.ai.dataset import evaluate_dataset
 from docguard.ai.evaluation import evaluate
 from docguard.ai.git_proposals import apply_git_proposal, suggest_git
 from docguard.ai.human_review import review_template, score_review
+from docguard.ai.operations import summarize_evaluation
 from docguard.ai.proposals import apply_proposal, suggest
 from docguard.ai.provider import generate
 from docguard.ai.upstream import evaluate_pr
@@ -21,6 +23,7 @@ from docguard.docs.mapping import load_mapping
 from docguard.docs.reporting import report_document, report_summary, report_text
 from docguard.docs.review import review_documents
 from docguard.git_review import review_git
+from docguard.publication import publish_proposal
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -216,8 +219,68 @@ def main(argv: list[str] | None = None) -> int:
     scoring.add_argument("report", type=Path)
     scoring.add_argument("--reviews", type=Path, required=True)
     scoring.add_argument("--output", type=Path, required=True)
+    publication = commands.add_parser(
+        "publish-proposal",
+        help="Preview or explicitly publish one validated Git proposal as a draft PR",
+    )
+    publication.add_argument("proposal", type=Path)
+    publication.add_argument("--root", type=Path, required=True)
+    publication.add_argument("--document", required=True)
+    publication.add_argument("--repository", required=True, help="GitHub owner/name")
+    publication.add_argument("--source-pr", type=int, required=True)
+    publication.add_argument(
+        "--publish",
+        action="store_true",
+        help="Authorize GitHub writes; default is a local preview",
+    )
+    candidates = commands.add_parser(
+        "benchmark-candidates",
+        help="Mine pinned PR review candidates from a local Git cache",
+    )
+    candidates.add_argument("--repository", type=Path, required=True)
+    candidates.add_argument("--upstream", required=True, help="GitHub owner/name")
+    candidates.add_argument("--limit", type=int, default=15)
+    candidates.add_argument("--output", type=Path, required=True)
+    operations = commands.add_parser(
+        "summarize-evaluation",
+        help="Summarize recorded quality and operational metrics without API calls",
+    )
+    operations.add_argument("report", type=Path)
+    operations.add_argument("--output", type=Path, required=True)
+    audit = commands.add_parser(
+        "benchmark-audit",
+        help="Check distinct PR counts and cross-manifest split leakage",
+    )
+    audit.add_argument("manifests", type=Path, nargs="+")
+    audit.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "benchmark-audit":
+            print(json.dumps(audit_benchmark(args.manifests, args.output), indent=2))
+            return 0
+        if args.command == "publish-proposal":
+            result_plan = publish_proposal(
+                args.proposal,
+                args.root,
+                args.document,
+                args.repository,
+                args.source_pr,
+                publish=args.publish,
+            )
+            print(json.dumps(result_plan, indent=2))
+            return 0
+        if args.command == "benchmark-candidates":
+            candidate_report = collect_candidates(
+                args.repository, args.upstream, args.output, args.limit
+            )
+            print(
+                f"Pending review candidates saved to {args.output}; independently reviewed: {candidate_report['independently_reviewed']}"
+            )
+            return 0
+        if args.command == "summarize-evaluation":
+            summary = summarize_evaluation(args.report, args.output)
+            print(json.dumps(summary, indent=2))
+            return 0
         if args.command == "review-template":
             review_template(args.report, args.output)
             print(f"Unfilled human review form: {args.output}")

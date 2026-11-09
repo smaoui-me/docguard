@@ -45,7 +45,7 @@ class TestDocumentMapping(unittest.TestCase):
         ]
         cases.extend(
             {"schema_version": version, "documents": {}}
-            for version in (True, 2, "1", None)
+            for version in (True, 3, "1", None)
         )
         for case in cases:
             with self.subTest(case=case):

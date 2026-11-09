@@ -1,0 +1,60 @@
+name: DocGuard CI
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docguard-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install development dependencies
+        run: python -m pip install ".[dev]"
+      - name: Lint
+        run: python -m ruff check src tests examples
+      - name: Type check
+        run: python -m mypy src
+      - name: Run offline tests
+        run: python -m pytest -q --junitxml=test-results.xml
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ matrix.os }}-${{ matrix.python }}
+          path: test-results.xml
+          if-no-files-found: ignore
+      - name: Build and smoke-test an isolated wheel installation
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.11'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip wheel . --no-deps --wheel-dir "$RUNNER_TEMP/wheels"
+          python -m venv "$RUNNER_TEMP/installed-docguard"
+          "$RUNNER_TEMP/installed-docguard/bin/python" -m pip install --no-index --no-deps "$RUNNER_TEMP"/wheels/docguard-*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/installed-docguard/bin/python" -I -m docguard --help
+          "$RUNNER_TEMP/installed-docguard/bin/docguard" --help

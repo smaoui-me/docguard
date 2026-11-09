@@ -1,0 +1,427 @@
+{
+  "candidates": [
+    {
+      "admitted": false,
+      "base": "189fc4bcbe5f314128775dec66a616ac9a31ad48",
+      "document_paths": [
+        "README.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#3412",
+      "head": "47f4a96ffaaaa07dca1614409549b5d7a6e7af49",
+      "id": "encode_httpx_3412",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/3412",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/__version__.py",
+        "httpx/_decoders.py"
+      ],
+      "split": "unassigned",
+      "title": "Handle empty zstd responses (#3412)"
+    },
+    {
+      "admitted": false,
+      "base": "41597adffa9d34171a63f7511fc0f702558dd08c",
+      "document_paths": [
+        "docs/advanced/ssl.md",
+        "docs/contributing.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#3394",
+      "head": "1805ee0d22f96e2b29f0500dd3076e10020004bf",
+      "id": "encode_httpx_3394",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/3394",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/__init__.py",
+        "httpx/_api.py",
+        "httpx/_client.py",
+        "httpx/_config.py",
+        "httpx/_main.py",
+        "httpx/_transports/default.py",
+        "httpx/_urls.py"
+      ],
+      "split": "unassigned",
+      "title": "Graceful upgrade path for 0.28. (#3394)"
+    },
+    {
+      "admitted": false,
+      "base": "3f76571d3429497c4ee4ecf5d8bc034b6f765957",
+      "document_paths": [
+        ".github/CONTRIBUTING.md",
+        "docs/advanced/ssl.md",
+        "docs/compatibility.md",
+        "docs/environment_variables.md",
+        "docs/logging.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#3319",
+      "head": "8e36f2bc685dfbe43cd7503bc1c422a6ed6e05a5",
+      "id": "encode_httpx_3319",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/3319",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/__init__.py",
+        "httpx/__version__.py",
+        "httpx/_api.py",
+        "httpx/_client.py",
+        "httpx/_compat.py",
+        "httpx/_config.py",
+        "httpx/_content.py",
+        "httpx/_decoders.py",
+        "httpx/_main.py",
+        "httpx/_transports/asgi.py",
+        "httpx/_transports/default.py",
+        "httpx/_types.py",
+        "httpx/_urls.py",
+        "httpx/_utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Introduce new `SSLContext` API & escalate deprecations. (#3319)"
+    },
+    {
+      "admitted": false,
+      "base": "7df47ce4d93a06f2c3310cd692b4c2336d7663ba",
+      "document_paths": [
+        "README.md",
+        "docs/index.md",
+        "docs/quickstart.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#3139",
+      "head": "392dbe45f086d0877bd288c5d68abf860653b680",
+      "id": "encode_httpx_3139",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/3139",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_compat.py",
+        "httpx/_decoders.py",
+        "httpx/_models.py"
+      ],
+      "split": "unassigned",
+      "title": "Add support for zstd decoding (#3139)"
+    },
+    {
+      "admitted": false,
+      "base": "6f461522a5c58839c31be3c82b7bd47fba77109b",
+      "document_paths": [
+        "docs/advanced/transports.md",
+        "docs/async.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#3050",
+      "head": "cabd1c095e52e2f67ab63ec17941d3a539d7c877",
+      "id": "encode_httpx_3050",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/3050",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_client.py"
+      ],
+      "split": "unassigned",
+      "title": "Deprecate `app=...` in favor of explicit `WSGITransport`/`ASGITransport`. (#3050)"
+    },
+    {
+      "admitted": false,
+      "base": "b471f01d668b9ef730e8843531b07b1c21b74c47",
+      "document_paths": [
+        "docs/advanced.md",
+        "docs/compatibility.md",
+        "docs/contributing.md",
+        "docs/troubleshooting.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2879",
+      "head": "f8981f3d124f9b8db9073fd5c8afa11acb55a738",
+      "id": "encode_httpx_2879",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2879",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_api.py",
+        "httpx/_client.py",
+        "httpx/_main.py",
+        "httpx/_transports/default.py",
+        "httpx/_types.py"
+      ],
+      "split": "unassigned",
+      "title": "Add the 'proxy' parameter and deprecate 'proxies'. (#2879)"
+    },
+    {
+      "admitted": false,
+      "base": "76c9cb65f2a159adb764c2236d139f85b46e1506",
+      "document_paths": [
+        "README.md",
+        "README_chinese.md",
+        "docs/index.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2813",
+      "head": "b40c04dfa604db0a5f9b48c12268c0a0c63c71d2",
+      "id": "encode_httpx_2813",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2813",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_compat.py"
+      ],
+      "split": "unassigned",
+      "title": "Drop support for Python 3.7 (#2813)"
+    },
+    {
+      "admitted": false,
+      "base": "55b8669acbedb617123409487f744810f59ebe6f",
+      "document_paths": [
+        "docs/api.md",
+        "docs/quickstart.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2776",
+      "head": "9415af643f23600403740baad0a466edc5cdbec1",
+      "id": "encode_httpx_2776",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2776",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_models.py"
+      ],
+      "split": "unassigned",
+      "title": "Make `raise_for_status` chainable (#2776)"
+    },
+    {
+      "admitted": false,
+      "base": "f6866ce388266ac5c395b68ce7f664911fd09d2c",
+      "document_paths": [
+        "docs/quickstart.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2768",
+      "head": "18d7721c385bd06516d91b3e6e8c55c8af9ca7b6",
+      "id": "encode_httpx_2768",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2768",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_models.py"
+      ],
+      "split": "unassigned",
+      "title": "Use Mozilla documentation instead of `httpstatuses.com` for HTTP error reference (#2768)"
+    },
+    {
+      "admitted": false,
+      "base": "85c5898d8e48011ab7b660fe8aac58910e45c84b",
+      "document_paths": [
+        "docs/environment_variables.md",
+        "docs/logging.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2547",
+      "head": "f1157dbc4102ac8e227a0a0bb12a877f592eff58",
+      "id": "encode_httpx_2547",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2547",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_client.py",
+        "httpx/_config.py",
+        "httpx/_utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Use standard logging style (#2547)"
+    },
+    {
+      "admitted": false,
+      "base": "7947b56076db933079ec0c33d1f81406e33008e7",
+      "document_paths": [
+        "docs/advanced.md",
+        "docs/environment_variables.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2535",
+      "head": "59914c7690573d5f9b17bce4172405294cb08278",
+      "id": "encode_httpx_2535",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2535",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/__init__.py",
+        "httpx/_auth.py",
+        "httpx/_client.py",
+        "httpx/_utils.py"
+      ],
+      "split": "unassigned",
+      "title": "Add `NetRCAuth()` class. (#2535)"
+    },
+    {
+      "admitted": false,
+      "base": "7c53d99da8351eea5ff71e1fa829e1d2e9727c0d",
+      "document_paths": [
+        "README.md",
+        "docs/index.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2252",
+      "head": "57daabf673705954afa94686c0002801c93d31f3",
+      "id": "encode_httpx_2252",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2252",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_urlparse.py",
+        "httpx/_urls.py"
+      ],
+      "split": "unassigned",
+      "title": "Drop `rfc3986` requirement. (#2252)"
+    },
+    {
+      "admitted": false,
+      "base": "940d61b239d0f387405f56005b13ad5aed3216b0",
+      "document_paths": [
+        "README.md",
+        "README_chinese.md",
+        "docs/advanced.md",
+        "docs/index.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2165",
+      "head": "1c33a2854e5d18955c8766c5c01e6229716b5b7a",
+      "id": "encode_httpx_2165",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2165",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_client.py",
+        "httpx/_models.py",
+        "setup.py"
+      ],
+      "split": "unassigned",
+      "title": "Make charset auto-detection optional. (#2165)"
+    },
+    {
+      "admitted": false,
+      "base": "f7a024cee3a161a37710c7b77e7d650f981d142d",
+      "document_paths": [
+        "README.md",
+        "README_chinese.md",
+        "docs/index.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2097",
+      "head": "67c297069f3d6b034069882428e4c1dd303d693c",
+      "id": "encode_httpx_2097",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2097",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_client.py",
+        "httpx/_compat.py",
+        "setup.py"
+      ],
+      "split": "unassigned",
+      "title": "Drop EOL Python 3.6 (#2097)"
+    },
+    {
+      "admitted": false,
+      "base": "7883c98556eaa7630454d5b62426a5c497542408",
+      "document_paths": [
+        "docs/advanced.md"
+      ],
+      "expected_action": null,
+      "group": "encode/httpx#2090",
+      "head": "2a08edc4714ea18f8bda893dc7c723972af58bd6",
+      "id": "encode_httpx_2090",
+      "independent": null,
+      "pin_basis": "integration commit and first parent; verify PR association during review",
+      "pr_url": "https://github.com/encode/httpx/pull/2090",
+      "provenance": "local first-parent Git history; PR number inferred from commit title",
+      "rationale": null,
+      "repository": "https://github.com/encode/httpx",
+      "review_status": "pending",
+      "reviewer": null,
+      "source_paths": [
+        "httpx/_config.py"
+      ],
+      "split": "unassigned",
+      "title": "adding keepalive_expiry param to docs and docstring (#2090)"
+    }
+  ],
+  "independently_reviewed": 0,
+  "kind": "docguard.benchmark.candidates",
+  "repository_head": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+  "schema_version": 1,
+  "selection": "first-parent commits touching implementation and documentation; biased toward paired updates"
+}

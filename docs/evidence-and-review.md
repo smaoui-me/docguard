@@ -132,3 +132,8 @@ scores, malformed forms, changed reports and reviewer independence denominators.
 For paced before/after AI comparisons with unchanged benchmark labels, see
 [baseline regression evaluation](baseline-regression.md). It also explains the
 request compaction and preservation diagnostics added after the first live pilot.
+
+For opt-in deterministic review routing when a documented claim lacks declared source
+evidence, see [claim requirements](claim-requirements.md). The
+[project roadmap](project-roadmap.md) distinguishes the current reliability milestone
+from the remaining GitHub product and benchmark work.

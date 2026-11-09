@@ -1,0 +1,57 @@
+name: DocGuard analysis
+description: Generate bounded Git documentation proposals without executing target source or publishing changes
+inputs:
+  root:
+    description: Absolute path to target Git checkout (treated as data)
+    required: true
+  base:
+    description: Target base commit
+    required: true
+  head:
+    description: Exact source commit
+    required: true
+  document:
+    description: One mapped document to review
+    required: true
+  mapping:
+    description: Repository-relative mapping at HEAD
+    default: docguard-map.json
+  output:
+    description: New absolute JSON output path
+    required: true
+  live:
+    description: Send evidence to the configured provider (otherwise save requests only)
+    default: 'false'
+  provider:
+    description: groq or openai
+    default: groq
+  model:
+    description: Provider model ID
+    default: openai/gpt-oss-120b
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - shell: bash
+      env:
+        TARGET_ROOT: ${{ inputs.root }}
+        BASE_SHA: ${{ inputs.base }}
+        HEAD_SHA: ${{ inputs.head }}
+        DOCUMENT: ${{ inputs.document }}
+        MAPPING: ${{ inputs.mapping }}
+        OUTPUT_PATH: ${{ inputs.output }}
+        LIVE: ${{ inputs.live }}
+        PROVIDER: ${{ inputs.provider }}
+        MODEL: ${{ inputs.model }}
+      run: |
+        set -euo pipefail
+        cd "$RUNNER_TEMP"
+        export PYTHONPATH="$GITHUB_ACTION_PATH/src"
+        flags=()
+        if [ "$LIVE" != "true" ]; then flags+=(--dry-run); fi
+        python -P -m docguard suggest-git --root "$TARGET_ROOT" \
+          --base "$BASE_SHA" --head "$HEAD_SHA" --mapping "$MAPPING" \
+          --document "$DOCUMENT" --max-documents 1 --output "$OUTPUT_PATH" \
+          --provider "$PROVIDER" --model "$MODEL" "${flags[@]}"

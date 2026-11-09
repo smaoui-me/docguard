@@ -23,7 +23,16 @@ def write_manifest(path, cases):
     lines = ["schema_version = 1"]
     for case in cases:
         lines.append("[[cases]]")
-        lines.extend(key + " = " + json.dumps(value) for key, value in case.items())
+        lines.extend(
+            key + " = " + json.dumps(value)
+            for key, value in case.items()
+            if key != "claims"
+        )
+        for claim in case.get("claims", []):
+            lines.append("[[cases.claims]]")
+            lines.extend(
+                key + " = " + json.dumps(value) for key, value in claim.items()
+            )
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
@@ -591,3 +600,58 @@ def test_preservation_findings_do_not_masquerade_as_semantic_failures(
     assert row["automatic_pass"] is True
     assert row["preservation"]["issues"] == ["trailing_newlines_changed"]
     assert row["human_review"]["accepted"] is None
+
+
+def test_explicit_requirements_route_without_credentials_or_api_and_resume(
+    upstream, tmp_path
+):
+    repo, case = upstream
+    case = {
+        **case,
+        "expected_action": "needs_review",
+        "claims": [
+            {
+                "id": "default",
+                "quote": "Defaults to 2.",
+                "required_evidence": ["after:missing.py:helper"],
+            }
+        ],
+    }
+    manifest = write_manifest(tmp_path / "claims.toml", [case])
+    output = tmp_path / "report.json"
+    config = AIConfig("groq", "test", "")
+    with patch("docguard.ai.upstream.generate") as api:
+        report = evaluate_pr(config, repo, manifest, output, live=True)
+        resumed = evaluate_pr(config, repo, manifest, output, live=True, resume=True)
+    api.assert_not_called()
+    row = report["results"][0]
+    assert row["detected"] is True
+    assert row["action"] == "needs_review"
+    assert row["automatic_pass"] is True
+    assert row["decision_source"] == "deterministic_gate"
+    assert report["api_requests"] == resumed["api_requests"] == 0
+    assert report["token_usage"]["total_tokens"] is None
+
+
+def test_credentials_still_required_when_gate_is_ready(upstream, tmp_path):
+    repo, case = upstream
+    case = {
+        **case,
+        "claims": [
+            {
+                "id": "default",
+                "quote": "Defaults to 2.",
+                "required_evidence": ["after:api.py:value"],
+            }
+        ],
+    }
+    with patch("docguard.ai.upstream.generate") as api:
+        with pytest.raises(ProposalError, match="credentials"):
+            evaluate_pr(
+                AIConfig("groq", "test", ""),
+                repo,
+                write_manifest(tmp_path / "claims.toml", [case]),
+                tmp_path / "report.json",
+                live=True,
+            )
+    api.assert_not_called()
