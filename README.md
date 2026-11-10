@@ -13,6 +13,9 @@ hosted and independent-review acceptance work. The [benchmark intake guide](docs
 distinguishes thirty pending PR candidates from the five-PR evaluated pilot.
 Measured checks, the live smoke result, and remaining gates are recorded in
 [the November 9 evaluation](docs/milestone-evaluation-20261109.md).
+The [CI application demo and benchmark runner](docs/ci-benchmark-demo.md) explain hosted
+integration and reproducible comparisons. See [the focused live pilot results](docs/pilot-value-20261109.md)
+for observed decisions, baseline comparisons, operating measurements and limitations.
 
 ## Current milestone: AI-assisted documentation proposals
 

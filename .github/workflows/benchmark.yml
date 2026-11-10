@@ -1,0 +1,73 @@
+name: DocGuard upstream benchmark
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Send public upstream evidence to Groq (otherwise preparation only)
+        type: boolean
+        default: false
+      max_requests:
+        description: Total request budget including retries (1 to 12)
+        default: '6'
+      selection:
+        description: Focused five-variant sample or all existing pilot cases
+        type: choice
+        options: [focused, all]
+        default: focused
+permissions:
+  contents: read
+concurrency:
+  group: docguard-upstream-benchmark
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Acquire upstream history as data
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/upstream"
+          git clone --bare https://github.com/encode/httpx.git "$RUNNER_TEMP/upstream/httpx-full.git"
+          git clone --bare https://github.com/pallets/click.git "$RUNNER_TEMP/upstream/click.git"
+      - name: Evaluate pinned commits
+        working-directory: ${{ runner.temp }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          LIVE: ${{ inputs.live }}
+          BUDGET: ${{ inputs.max_requests }}
+          SELECTION: ${{ inputs.selection }}
+        run: |
+          set -euo pipefail
+          [[ "$BUDGET" =~ ^([1-9]|1[0-2])$ ]]
+          flags=()
+          if [ "$LIVE" == "true" ]; then flags+=(--live); fi
+          if [ "$SELECTION" == "focused" ]; then
+            flags+=(--case httpx_3378_authentic --case httpx_3378_stale_claim)
+            flags+=(--case httpx_3364_dependency_ablation --case click_3239_authentic)
+            flags+=(--case httpx_3364_explicit_requirements)
+          fi
+          python -P "$GITHUB_WORKSPACE/examples/run_pilot.py" \
+            --cache "$RUNNER_TEMP/upstream" --output "$RUNNER_TEMP/benchmark" \
+            --provider groq --model openai/gpt-oss-120b \
+            --max-requests "$BUDGET" --delay-seconds 65 "${flags[@]}"
+      - name: Publish measurement summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/benchmark/summary.md" ]; then
+            cat "$RUNNER_TEMP/benchmark/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/benchmark
+          if-no-files-found: warn
+          retention-days: 14

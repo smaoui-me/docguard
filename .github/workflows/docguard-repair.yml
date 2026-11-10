@@ -32,6 +32,23 @@ jobs:
       digest: ${{ steps.digest.outputs.digest }}
       applicable: ${{ steps.decision.outputs.applicable }}
     steps:
+      - name: Require protected publication environment
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/environments/docguard-publish" > "$RUNNER_TEMP/publication-environment.json"
+          python - <<'PY'
+          import json, os, pathlib
+          data = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'publication-environment.json').read_text())
+          protected = any(
+              rule.get('type') == 'required_reviewers' and rule.get('reviewers')
+              for rule in data.get('protection_rules', [])
+          )
+          if not protected:
+              raise SystemExit('Publication requires a configured environment with required reviewers; use analysis-only or reviewed local publication.')
+          PY
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}

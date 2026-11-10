@@ -14,10 +14,13 @@ Three workflows have different responsibilities:
 | `docguard-review.yml` | PRs | Deterministic documentation impact analysis and advisory artifacts | Read-only repository token |
 | `docguard-repair.yml` | Manual dispatch | Optional bounded AI analysis, then optional draft publication for an applicable revision | AI key in analysis; write token only in publication job |
 
-First push/merge these workflows, observe all CI matrix jobs, and fix any platform
-failures before making their named checks required in a branch ruleset. The matrix
-is configured; its hosted results have not yet been observed. Keep the documentation
+The [first hosted CI run](https://github.com/smaoui-me/docguard/actions/runs/42693012315)
+passed all four matrix jobs for commit `c7c4269`. Keep checking subsequent commits
+before making their named checks required in a branch ruleset. Keep the documentation
 review advisory until mappings have been checked against real changes.
+
+Use [the CI demo and comparative benchmark guide](ci-benchmark-demo.md) for a
+separate application repository, scenario branches, runner setup and real-PR metrics.
 
 For repairs, follow [targeted-repair.md](targeted-repair.md): start with live and
 publish disabled, inspect the saved request, then enable live analysis only. Add the
@@ -41,6 +44,9 @@ the sole merge gate. Release tags and package publication remain a later explici
 step after the hosted and independent-review acceptance gates below are met.
 
 ## External installation trial (pending)
+
+The author-operated private demo now has [a hosted trial record](hosted-trial-20261109.md).
+This does not satisfy the independent installation trial below.
 
 Ask another developer to use a new environment and a disposable GitHub repository.
 Give them this document and the README, without walking them through undocumented

@@ -2,25 +2,52 @@ name: DocGuard documentation review
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      source_pr:
+        description: Open same-repository PR number to review
+        required: true
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Resolve review commits
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.source_pr || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/review-pr.json"
+          python - <<'PY'
+          import json, os, pathlib, re
+          pr = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'review-pr.json').read_text())
+          assert pr['state'] == 'open', 'PR must be open'
+          if os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch':
+              assert pr['head']['repo']['full_name'] == os.environ['GITHUB_REPOSITORY'], 'Manual fork review is unsupported'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              for side in ('base', 'head'):
+                  sha = pr[side]['sha']
+                  assert re.fullmatch('[0-9a-f]{40}', sha)
+                  stream.write(f'{side}={sha}\n')
+          PY
       - name: Check out trusted tool from target branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ steps.source.outputs.base }}
           path: trusted-tool
           persist-credentials: false
       - name: Check out proposed source and history as data
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ steps.source.outputs.head }}
           path: target
           fetch-depth: 0
           persist-credentials: false
@@ -31,8 +58,8 @@ jobs:
         working-directory: ${{ runner.temp }}
         env:
           PYTHONPATH: ${{ github.workspace }}/trusted-tool/src
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ steps.source.outputs.base }}
+          HEAD_SHA: ${{ steps.source.outputs.head }}
           TARGET_ROOT: ${{ github.workspace }}/target
         run: |
           python -P -m docguard review-git \
