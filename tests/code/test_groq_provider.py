@@ -15,6 +15,36 @@ DECISION = {
 }
 
 
+def test_experimental_prompt_schema_are_explicit_and_share_transport():
+    schema = {"type": "object", "properties": {"supported": {"type": "boolean"}}}
+    with patch("docguard.ai.provider.build_opener") as builder:
+        builder.return_value.open.return_value.__enter__.return_value.read.return_value = json.dumps(
+            envelope('{"supported": true}')
+        ).encode()
+        result = generate(
+            "test",
+            {"document_text": "doc"},
+            provider="groq",
+            api_key="test",
+            instructions="Check support",
+            schema=schema,
+        )
+        payload = json.loads(builder.return_value.open.call_args.args[0].data)
+        assert payload["messages"][0]["content"] == "Check support"
+        assert payload["response_format"]["json_schema"]["schema"] == schema
+        assert result == {"supported": True}
+        assert (
+            payload["max_completion_tokens"]
+            == request_payload("test", {"document_text": "doc"}, "groq")[
+                "max_completion_tokens"
+            ]
+        )
+    with pytest.raises(ProposalError, match="together"):
+        generate(
+            "test", {}, provider="groq", api_key="test", instructions="Check support"
+        )
+
+
 def envelope(content=None, finish="stop"):
     return {
         "choices": [

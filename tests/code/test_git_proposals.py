@@ -94,7 +94,10 @@ def test_dry_run_has_both_sources_diff_and_evidence_schema_ignores_dirty_worktre
     context = json.loads(payload["messages"][1]["content"])
     assert len(context["evidence"]) == 2
     assert "+def connect" in context["changes"][0]["diff"]
-    assert "previous_document_text" in context or context["previous_document_same_as_current"]
+    assert (
+        "previous_document_text" in context
+        or context["previous_document_same_as_current"]
+    )
     assert (
         "evidence_ids"
         in payload["response_format"]["json_schema"]["schema"]["required"]

@@ -5,6 +5,12 @@ import pytest
 
 from docguard.ai.config import AIConfig
 from docguard.ai.dataset import create_case_repository
+from docguard.ai.experiment_packet import (
+    load_labels,
+    load_packet,
+    prepare_packet,
+    reference_labels,
+)
 from docguard.ai.files import ProposalError
 from docguard.ai.provider import ProviderError
 from docguard.ai.upstream import (
@@ -17,6 +23,23 @@ from docguard.ai.upstream import (
 )
 
 CONFIG = AIConfig("groq", "test", "fake-key")
+
+
+def test_review_packet_pins_real_git_evidence_without_leaking_provisional_labels(
+    upstream, tmp_path
+):
+    repository, case = upstream
+    manifest = write_manifest(tmp_path / "cases.toml", [case])
+    output = tmp_path / "packet.json"
+    prepare_packet([(manifest, repository)], output, [case["id"]])
+    _, packet = load_packet(output)
+    assert len(packet["cases"]) == 1
+    row = packet["cases"][0]
+    assert row["provenance"]["upstream_head"] == case["head"]
+    assert row["contexts"]["mapped"]["document_text"].startswith("## Value")
+    assert "expected_action" not in output.read_text()
+    assert case["rationale"] not in output.read_text()
+    assert row["exposure"] == "previously_inspected_regression"
 
 
 def write_manifest(path, cases):
@@ -35,6 +58,56 @@ def write_manifest(path, cases):
             )
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def test_paired_reference_keeps_corrected_document_out_of_repair_input(
+    upstream, tmp_path
+):
+    repository, case = upstream
+    manifest = write_manifest(tmp_path / "paired.toml", [case])
+    output = tmp_path / "packet.json"
+    prepare_packet([(manifest, repository)], output, [case["id"]], paired_upstream=True)
+    packet_hash, packet = load_packet(output)
+    before, after = packet["cases"]
+    assert before["group"] == after["group"]
+    assert (
+        before["contexts"]["mapped"]["document_text"] == "## Value\nDefaults to 1.\n\n"
+    )
+    assert (
+        after["contexts"]["mapped"]["document_text"] == "## Value\nDefaults to 2.\n\n"
+    )
+    reference = before["upstream_reference"]
+    assert reference == after["upstream_reference"]
+    assert reference["documents"]["head"]["revision"] == case["head"]
+    assert reference["documents"]["base"]["revision"] == case["base"]
+    assert "Defaults to 2" not in json.dumps(before["contexts"])
+    assert "Defaults to 2" in reference["diff"]
+    labels = tmp_path / "labels.json"
+    reference_labels(output, labels)
+    _, rows = load_labels(labels, packet_hash, packet)
+    assert [r["mapped"] for r in rows.values()] == ["revise", "unchanged"]
+    assert all(
+        r["reviewer"] == "" and r["review_level"] == "upstream_reference"
+        for r in rows.values()
+    )
+
+
+def test_pair_requires_explicit_seed_and_rejects_ablation(upstream, tmp_path):
+    repo, case = upstream
+    manifest = write_manifest(
+        tmp_path / "cases.toml", [{**case, "variant": "dependency_ablation"}]
+    )
+    with pytest.raises(ProposalError, match="explicit seed"):
+        prepare_packet(
+            [(manifest, repo)], tmp_path / "packet.json", [], paired_upstream=True
+        )
+    with pytest.raises(ProposalError, match="ablation"):
+        prepare_packet(
+            [(manifest, repo)],
+            tmp_path / "packet.json",
+            [case["id"]],
+            paired_upstream=True,
+        )
 
 
 @pytest.fixture(scope="module")
@@ -76,6 +149,29 @@ def upstream(tmp_path_factory):
         "preserve": ["## Value"],
     }
     return root, case
+
+
+def test_pair_rejects_unchanged_docs_and_duplicate_seeds(upstream, tmp_path):
+    repo, case = upstream
+    manifest = write_manifest(tmp_path / "same.toml", [{**case, "head": case["base"]}])
+    with pytest.raises(ProposalError, match="changed documentation section"):
+        prepare_packet(
+            [(manifest, repo)],
+            tmp_path / "packet.json",
+            [case["id"]],
+            paired_upstream=True,
+        )
+    manifest = write_manifest(
+        tmp_path / "duplicates.toml",
+        [case, {**case, "id": "duplicate", "variant": "base_docs"}],
+    )
+    with pytest.raises(ProposalError, match="one seed"):
+        prepare_packet(
+            [(manifest, repo)],
+            tmp_path / "packet.json",
+            [case["id"], "duplicate"],
+            paired_upstream=True,
+        )
 
 
 def test_projection_preserves_sources_and_tracks_doc_selection(upstream, tmp_path):

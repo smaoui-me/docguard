@@ -1,0 +1,9 @@
+**
+!Dockerfile
+!pyproject.toml
+!MANIFEST.in
+!README.md
+!src/
+!src/docguard/
+!src/docguard/**/
+!src/docguard/**/*.py

@@ -1,0 +1,8 @@
+include README.md pyproject.toml MANIFEST.in
+recursive-include src/docguard *.py
+include examples/verify_installation.py
+prune tests
+prune docs
+prune evaluations
+prune src/docguard.egg-info
+global-exclude __pycache__ *.py[cod] .env .env.*

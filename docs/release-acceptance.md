@@ -4,6 +4,10 @@ The current deliverable is a tested repair prototype with a controlled publicati
 path. It is not yet an externally validated production service. Use acceptance
 evidence rather than a completion percentage.
 
+The [distribution guide](distribution.md) now describes wheel/container installation,
+isolated acceptance checks, and the gated release workflow. Its local results are
+recorded separately from hosted execution and an independent installation trial.
+
 ## CI/CD rollout
 
 Three workflows have different responsibilities:
@@ -117,6 +121,14 @@ approval settings must be configured and verified separately from committing YAM
 - Tag a reviewed release commit and document the supported installation/version.
 - Establish operating budgets, artifact retention and who handles review failures.
 
-Additional languages, automated link discovery, a browser UI and embeddings remain
+Additional languages, automated link discovery, a hosted review service and embeddings remain
 separate product/research milestones. They should follow measured failures and user
 needs, not replace the acceptance work above.
+
+## Benchmark review addition — November 10, 2026
+
+The [manual benchmark workflow](manual-benchmark-review.md) now separates human
+labels, model comparisons, and output acceptance ratings. Release claims must
+identify the reviewed cohort and case exposure. Previously inspected HTTPX/Click
+pilots do not establish fresh held-out performance. The new browser CI job checks
+review interactions without model credentials; its hosted execution is pending.

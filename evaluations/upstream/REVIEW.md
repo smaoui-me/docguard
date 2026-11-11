@@ -39,15 +39,19 @@ checks whether the documentation already supplied by the author is sufficient.
 4. Record reviewer identity, date, agreement/disagreement and corrections in a
    reviewed change to the manifest. Resolve disagreements before freezing labels.
 5. Keep every variant of a PR and closely related API changes in one split.
-   Keep HTTPX for development and Click reserved. Do not adjust prompts based on
-   reserved results. If a case leaks into tuning, move the whole group out of the
-   held-out set and recruit a new group.
+   HTTPX and Click pilot cases have now both been inspected during development;
+   they are regression/development cases. Click #3239 has been moved out of the
+   held-out split. Freeze new groups before running models and do not tune on
+   their results. If a group leaks into tuning, recruit a new held-out group.
 6. Add real PRs in small reviewed batches toward about 30 changes. Count distinct
    PRs separately from variants. Include genuine historical stale prose, no-edit
    negatives, missing dependencies, renames, deletions and multi-file behavior.
 
 The tests validate pins/manifest shape, grouping and pipeline behavior. They
 cannot replace an independent person's judgment of labels or generated claims.
+
+The [manual benchmark guide](../../docs/manual-benchmark-review.md) describes the
+offline review UI, labeling before model outputs, and five-method comparison.
 
 
 ## Record actual output reviews

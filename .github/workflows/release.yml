@@ -1,0 +1,187 @@
+name: Release verification and publication
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Build only, or publish tested artifacts from a version tag
+        type: choice
+        options: [build, testpypi, pypi, ghcr]
+        default: build
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.target || 'build' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - id: version
+        name: Check release identity
+        env:
+          TARGET: ${{ inputs.target || 'build' }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, tomllib
+          project = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']
+          version = project['version']
+          if os.environ['TARGET'] != 'build':
+              assert os.environ['GITHUB_REF'] == f'refs/tags/v{version}', 'Publish only from a tag matching package version'
+              assert project.get('license') and list(pathlib.Path('.').glob('LICENSE*')), 'Choose a license and include its text before publication'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'version={version}\n')
+          PY
+      - name: Verify publication approval is configured
+        if: github.event_name == 'workflow_dispatch' && inputs.target != 'build'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/environments/$TARGET" > "$RUNNER_TEMP/release-environment.json"
+          python - <<'PY'
+          import json, os, pathlib
+          data = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'release-environment.json').read_text())
+          assert any(r.get('type') == 'required_reviewers' and r.get('reviewers') for r in data.get('protection_rules', [])), 'Configure required reviewers before publication'
+          PY
+      - run: python -m pip install ".[dev,release]"
+      - run: python -m ruff check src tests examples
+      - run: python -m mypy src
+      - run: python -m pytest -q
+      - name: Build wheel from source distribution and inspect payloads
+        run: |
+          python -m build
+          python -m twine check --strict dist/*.whl dist/*.tar.gz
+          python examples/check_distributions.py dist
+      - name: Verify isolated installed wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/release-install"
+          "$RUNNER_TEMP/release-install/bin/python" -m pip install --no-index --no-deps dist/*.whl
+          "$RUNNER_TEMP/release-install/bin/python" examples/verify_installation.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: error
+
+  windows-install:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - shell: pwsh
+        run: |
+          python -m venv "$env:RUNNER_TEMP/release-install"
+          $releasePython = "$env:RUNNER_TEMP/release-install/Scripts/python.exe"
+          $releaseWheel = (Get-ChildItem dist/*.whl).FullName
+          & $releasePython -m pip install --no-index --no-deps $releaseWheel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $releasePython examples/verify_installation.py
+          exit $LASTEXITCODE
+
+  container:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and exercise restricted runtime
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker build --tag docguard:tested --label "org.opencontainers.image.revision=$GITHUB_SHA" --label "org.opencontainers.image.version=$VERSION" .
+          test "$(docker image inspect docguard:tested --format '{{.Config.User}}')" = '10001:10001'
+          docker run --rm --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges docguard:tested --version
+          docker run --rm --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/examples/verify_installation.py,dst=/checks/verify_installation.py,readonly" \
+            --entrypoint python docguard:tested -I /checks/verify_installation.py
+          mkdir -p "$RUNNER_TEMP/container-source" "$RUNNER_TEMP/container-output"
+          printf 'def example(value):\n    return value\n' > "$RUNNER_TEMP/container-source/api.py"
+          chmod 777 "$RUNNER_TEMP/container-output"
+          docker run --rm --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+            --mount "type=bind,src=$RUNNER_TEMP/container-source,dst=/workspace,readonly" \
+            --mount "type=bind,src=$RUNNER_TEMP/container-output,dst=/output" \
+            docguard:tested snapshot /workspace --output /output/snapshot.json
+          test -s "$RUNNER_TEMP/container-output/snapshot.json"
+          docker save docguard:tested | gzip > "$RUNNER_TEMP/docguard-image.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tested-image
+          path: ${{ runner.temp }}/docguard-image.tar.gz
+          retention-days: 7
+
+  publish-python:
+    if: github.event_name == 'workflow_dispatch' && (inputs.target == 'testpypi' || inputs.target == 'pypi')
+    needs: [build, windows-install, container]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - run: |
+          cd dist
+          sha256sum --check SHA256SUMS
+          rm SHA256SUMS
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.target == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+
+  publish-container:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'ghcr'
+    needs: [build, windows-install, container]
+    runs-on: ubuntu-latest
+    environment: ghcr
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tested-image
+      - name: Publish the tested image without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          # Fail rather than deliberately overwrite an existing version tag.
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            echo 'Version tag already exists; choose a new version.' >&2
+            exit 1
+          fi
+          gunzip -c docguard-image.tar.gz | docker load
+          docker tag docguard:tested "$image"
+          docker push "$image"

@@ -4,17 +4,22 @@ import argparse
 import json
 import sys
 from functools import partial
+from importlib.metadata import version
 from pathlib import Path
 
 from docguard.ai.benchmark import audit_benchmark, collect_candidates
 from docguard.ai.config import load_config
 from docguard.ai.dataset import evaluate_dataset
 from docguard.ai.evaluation import evaluate
+from docguard.ai.experiment_packet import prepare_packet, reference_labels
+from docguard.ai.experiments import run_experiment, score_experiment
 from docguard.ai.git_proposals import apply_git_proposal, suggest_git
 from docguard.ai.human_review import review_template, score_review
 from docguard.ai.operations import summarize_evaluation
 from docguard.ai.proposals import apply_proposal, suggest
 from docguard.ai.provider import generate
+from docguard.ai.reference_benchmark import evaluate_reference
+from docguard.ai.review_ui import render_review_ui
 from docguard.ai.upstream import evaluate_pr
 from docguard.code.comparison import compare_snapshots
 from docguard.code.index import index_repository
@@ -29,6 +34,9 @@ from docguard.publication import publish_proposal
 def main(argv: list[str] | None = None) -> int:
     """Return 0 for success/no changes, 1 for changes, and 2 for errors."""
     parser = argparse.ArgumentParser(prog="docguard", description=__doc__)
+    parser.add_argument(
+        "--version", action="version", version=f"docguard {version('docguard')}"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     snapshot = commands.add_parser("snapshot", help="Save a repository index as JSON")
     snapshot.add_argument("root", type=Path, help="Repository directory")
@@ -253,8 +261,148 @@ def main(argv: list[str] | None = None) -> int:
     )
     audit.add_argument("manifests", type=Path, nargs="+")
     audit.add_argument("--output", type=Path, required=True)
+    packet = commands.add_parser(
+        "review-pack", help="Prepare pinned evidence for manual labels; no model calls"
+    )
+    packet.add_argument("--manifest", type=Path, action="append", required=True)
+    packet.add_argument("--repository", type=Path, action="append", required=True)
+    packet.add_argument("--case", action="append", default=[])
+    packet.add_argument("--output", type=Path, required=True)
+    packet.add_argument(
+        "--paired-upstream",
+        action="store_true",
+        help="Create old-doc/new-code and updated-doc/new-code cases from each selected seed",
+    )
+    packet.add_argument(
+        "--discussion", type=Path, help="Optional JSON snapshot of GitHub PR comments"
+    )
+    reference = commands.add_parser(
+        "reference-labels",
+        help="Create explicitly provisional expectations from upstream doc changes",
+    )
+    reference.add_argument("packet", type=Path)
+    reference.add_argument("--output", type=Path, required=True)
+    ui = commands.add_parser(
+        "review-ui", help="Create a standalone offline review page"
+    )
+    ui.add_argument("packet", type=Path)
+    ui.add_argument("--report", type=Path)
+    ui.add_argument(
+        "--labels", type=Path, help="Preload reference or human labels for verification"
+    )
+    ui.add_argument("--output", type=Path, required=True)
+    experiment = commands.add_parser(
+        "evaluate-experiment",
+        help="Compare baseline, evidence and validator methods on manually labeled cases",
+    )
+    experiment.add_argument("packet", type=Path)
+    experiment.add_argument("--labels", type=Path, required=True)
+    experiment.add_argument("--output", type=Path, required=True)
+    experiment.add_argument("--live", action="store_true")
+    experiment.add_argument("--resume", action="store_true")
+    experiment.add_argument("--max-requests", type=int, default=5)
+    experiment.add_argument("--delay-seconds", type=float, default=65)
+    experiment.add_argument("--provider", choices=("openai", "groq"))
+    experiment.add_argument("--model")
+    experiment.add_argument(
+        "--discussion-mode", choices=("withheld", "input"), default="withheld"
+    )
+    score_exp = commands.add_parser(
+        "score-experiment", help="Score report-bound human ratings and validator errors"
+    )
+    score_exp.add_argument("report", type=Path)
+    score_exp.add_argument("--reviews", type=Path, required=True)
+    score_exp.add_argument("--output", type=Path, required=True)
+    automated = commands.add_parser(
+        "evaluate-reference",
+        help="Generate documentation and automatically compare it with upstream corrections; no human labels",
+    )
+    automated.add_argument("packet", type=Path)
+    automated.add_argument("--output-dir", type=Path, required=True)
+    automated.add_argument("--live", action="store_true")
+    automated.add_argument("--resume", action="store_true")
+    automated.add_argument(
+        "--retry-judge-errors",
+        action="store_true",
+        help="Retry each invalid judge response once, retaining the rejected response",
+    )
+    automated.add_argument("--max-requests", type=int, default=8)
+    automated.add_argument("--delay-seconds", type=float, default=65)
+    automated.add_argument("--provider", choices=("groq", "openai"))
+    automated.add_argument("--model")
     args = parser.parse_args(argv)
     try:
+        if args.command == "evaluate-reference":
+            comparison = evaluate_reference(
+                args.packet,
+                args.output_dir,
+                load_config(provider=args.provider, model=args.model),
+                live=args.live,
+                resume=args.resume,
+                max_requests=args.max_requests,
+                delay_seconds=args.delay_seconds,
+                retry_judge_errors=args.retry_judge_errors,
+            )
+            print(json.dumps(comparison["metrics"], indent=2))
+            print(
+                f"Comparison: {args.output_dir / 'comparison.html'}; requests this invocation: {comparison['session_requests']}"
+            )
+            return int(
+                args.live
+                and comparison["metrics"]["overall"]["aligned"]
+                != comparison["metrics"]["overall"]["total"]
+            )
+        if args.command == "reference-labels":
+            reference_labels(args.packet, args.output)
+            print(
+                f"Saved provisional upstream-reference labels to {args.output}; no human review implied"
+            )
+            return 0
+        if args.command == "review-pack":
+            if len(args.manifest) != len(args.repository):
+                raise ValueError(
+                    "Pair each --manifest with one --repository in the same order"
+                )
+            prepare_packet(
+                list(zip(args.manifest, args.repository)),
+                args.output,
+                args.case,
+                paired_upstream=args.paired_upstream,
+                discussion=args.discussion,
+            )
+            print(f"Saved pinned review evidence to {args.output}; no model calls")
+            return 0
+        if args.command == "review-ui":
+            render_review_ui(
+                args.packet, args.output, args.report, labels_path=args.labels
+            )
+            print(f"Open {args.output.resolve()} in your browser; no server required")
+            return 0
+        if args.command == "evaluate-experiment":
+            experiment_result = run_experiment(
+                args.packet,
+                args.labels,
+                args.output,
+                load_config(provider=args.provider, model=args.model),
+                live=args.live,
+                resume=args.resume,
+                max_requests=args.max_requests,
+                delay_seconds=args.delay_seconds,
+                discussion_mode=args.discussion_mode,
+            )
+            print(
+                f"Saved experiment to {args.output}; requests this invocation: {experiment_result['session_requests']}"
+            )
+            return int(
+                args.live
+                and any(
+                    r["status"] != "completed" for r in experiment_result["results"]
+                )
+            )
+        if args.command == "score-experiment":
+            score_experiment(args.report, args.reviews, args.output)
+            print(f"Saved human acceptance and validator scores to {args.output}")
+            return 0
         if args.command == "benchmark-audit":
             print(json.dumps(audit_benchmark(args.manifests, args.output), indent=2))
             return 0

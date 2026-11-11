@@ -10,6 +10,21 @@
       "src/docguard/docs/mapping.py:load_mapping",
       "src/docguard/docs/review.py:review_documents"
     ],
+    "docs/cli-reference.md": [
+      "src/docguard/cli.py:main",
+      "src/docguard/code/index.py:index_repository",
+      "src/docguard/code/snapshots.py:save_snapshot",
+      "src/docguard/code/snapshots.py:load_snapshot",
+      "src/docguard/code/comparison.py:compare_snapshots",
+      "src/docguard/docs/mapping.py:load_mapping",
+      "src/docguard/docs/review.py:review_documents"
+    ],
+    "docs/automatic-reference-evaluation.md": [
+      "src/docguard/ai/reference_benchmark.py:evaluate_reference",
+      "src/docguard/ai/reference_benchmark.py:judge_result",
+      "src/docguard/ai/reference_benchmark.py:summary",
+      "src/docguard/ai/reference_benchmark.py:render_report"
+    ],
     "docs/upstream-evaluation.md": [
       "src/docguard/ai/upstream.py:evaluate_pr",
       "src/docguard/ai/upstream.py:_evaluate_pr",

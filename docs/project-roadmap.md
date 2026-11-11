@@ -2,10 +2,34 @@
 
 ## Latest implementation
 
+The [automatic reference benchmark](automatic-reference-evaluation.md) now compares
+live documentation outputs directly with upstream-authored corrections, without
+human labels or review forms. Exact matches and semantic judge outcomes produce
+an HTML comparison report. This measures automated reference agreement, with
+coverage and errors retained; it does not certify independent factual accuracy.
+
+[Upstream reference pairs](upstream-reference-benchmark.md) now use the engineers'
+actual documentation corrections as reviewer evidence. Provisional labels can be
+verified by the project owner and independently audited in subsets. The comparison
+reports distinguish those levels; PR discussions are withheld by default, with a
+separate explicit input experiment available. No semantic improvement is inferred
+from the existence of a reference patch.
+
+The [manual review UI and five-method experiment](manual-benchmark-review.md)
+now support labels before inference, actual simple-LLM comparisons, separate
+retrieval and validator effects, bounded resumable calls, and report-bound human
+ratings. The validator remains evaluation-only. Existing HTTPX and Click cases
+are regression data; no new independent or held-out improvement result is claimed.
+Distribution checks and an installable alpha are described in
+[distribution](distribution.md); external installation and registry release remain
+pending.
+
 Section-scoped Git proposals now preserve bytes outside a mapped Markdown heading
 path and revalidate that scope during apply. A reusable analysis action and explicit
 draft publisher implement a local preview, source-head checks, same-repository
-publication and idempotent reruns. Hosted execution remains an acceptance gate.
+publication and idempotent reruns. Automatic hosted CI and live analysis now have
+[public synthetic acceptance evidence](public-hosted-acceptance.md); hosted publication
+is awaiting human approval and is not yet counted as passed.
 
 Thirty distinct pinned PR candidates are checked in, all pending review. The admitted
 pilot is still five distinct PRs (ten original variants plus one claim-contract
@@ -30,7 +54,7 @@ evaluations. The phases overlap; completing one experiment does not complete a p
 | 3. Repair engine — current focus | Groq/OpenAI proposals, citations, preview/apply, stale guards, missing-evidence routing, bounded ATX section edits with outside-byte guarantees | Broader Markdown support, stronger semantic checks and claim coverage |
 | 4. GitHub product | Read-only advisory workflow, reusable analysis action, bounded AI job, explicit draft publisher with rerun/head/lifecycle checks | Hosted installation trial, environment protection, immutable action pins and released action version |
 | 5. Real-repository evaluation | Synthetic cases, ten original variants from five PRs, checkpointed live runs, human-review forms, separate contract experiment | Independent labels, larger distinct-PR benchmark, fresh held-out groups, repeated trials, human acceptance measurements |
-| 6. Portfolio/release | CLI, docs, offline demos, recorded limitations | Supported release/install path, external install trial, end-to-end demo video, concise public evaluation summary |
+| 6. Portfolio/release | CLI, docs, offline demos, recorded limitations, wheel/container packaging, isolated installation checks | License and registry configuration, hosted release verification, external install trial, demo video, independent evaluation summary |
 
 The project is still Python-source focused. Other files are not automatically understood
 as code merely because Git can read them. Markdown documents are the current repair target.

@@ -212,8 +212,37 @@ def generate(
     provider: str = "openai",
     api_key: str | None = None,
     usage_sink: Callable[[dict[str, int]], None] | None = None,
+    instructions: str | None = None,
+    schema: dict[str, object] | None = None,
 ) -> object:
     payload = request_payload(model, context, provider)
+    # Explicit experimental prompts use the same bounded transport and telemetry.
+    # Normal product generation retains its original prompt/schema unchanged.
+    if (instructions is None) != (schema is None):
+        raise ProposalError("Custom instructions and schema must be supplied together")
+    if instructions is not None and schema is not None:
+        if provider == "groq":
+            cast(list[dict[str, object]], payload["messages"])[0]["content"] = (
+                instructions
+            )
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "experiment_decision",
+                    "strict": True,
+                    "schema": schema,
+                },
+            }
+        else:
+            payload["instructions"] = instructions
+            payload["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": "experiment_decision",
+                    "strict": True,
+                    "schema": schema,
+                }
+            }
     key_name = f"{provider.upper()}_API_KEY"
     label = "Groq" if provider == "groq" else "OpenAI"
     key = (os.environ.get(key_name, "") if api_key is None else api_key).strip()

@@ -24,6 +24,7 @@ dist/
 .docguard-demo/
 .docguard-demo-*/
 .docguard-upstream/
+.docguard-ci/
 
 # Local credentials (keep the template versioned)
 .env

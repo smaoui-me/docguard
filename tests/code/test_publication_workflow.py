@@ -25,7 +25,9 @@ import pytest
 def test_publication_requires_actual_reviewers(tmp_path, rules, allowed):
     workflow = Path(".github/workflows/docguard-repair.yml").read_text()
     step = workflow.split("name: Require protected publication environment", 1)[1]
-    script = textwrap.dedent(step.split("python - <<'PY'\n", 1)[1].split("          PY", 1)[0])
+    script = textwrap.dedent(
+        step.split("python - <<'PY'\n", 1)[1].split("          PY", 1)[0]
+    )
     (tmp_path / "publication-environment.json").write_text(
         json.dumps({"protection_rules": rules}), encoding="utf-8"
     )
