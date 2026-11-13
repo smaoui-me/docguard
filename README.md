@@ -130,10 +130,6 @@ an unseen test set.
 
 ## Development and documentation
 
-Recording a walkthrough? Use the [5–6 minute demo script](docs/video-demo-long.md)
-or the [90-second alternative](docs/video-demo-short.md), including screen setup,
-commands and narration.
-
 ```powershell
 .venv\Scripts\python.exe -m pip install -e ".[dev]"
 .venv\Scripts\python.exe -m pytest -q
